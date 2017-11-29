@@ -24,18 +24,24 @@ _read_file_header_64:
 	syscall
 	cmp rax, 64
 	jl _end
+	;; check magic number
 	cmp DWORD [rsp], 0x464c457f
 	jne _end
+	;; check class file (only 64 bits are treated)
 	cmp BYTE [rsp + 4], 2
 	jne _end
+	;; check the file type, only exec files are treated
 	cmp WORD [rsp + 16], 2
 	jne _end
+	;; just print string for debug, will not appear in final version
+;;;;;;;;;;;;;;;;;;;;;;;;
 	push 0x000a6b6f
 	mov rax, 1
 	mov rdi, 1
 	mov rsi, rsp
 	mov rdx, 3
 	syscall
+;;;;;;;;;;;;;;;;;;;;;;;;
 	mov rax, 3
 	mov rdi, QWORD [rsp + 4096]
 	syscall
