@@ -9,7 +9,7 @@ _treat_file:
 	cmp rdi, 0
 	je _end
 	mov rax, 2
-	mov rsi, 1
+	mov rsi, 2
 	xor rdx, rdx
 	syscall
 	cmp rax, -1
@@ -28,7 +28,7 @@ _read_file_header_64:
 	jne _end
 	cmp BYTE [rsp + 4], 2
 	jne _end
-	cmp QWORD [rsp + 16], 2
+	cmp WORD [rsp + 16], 2
 	jne _end
 	push 0x000a6b6f
 	mov rax, 1
