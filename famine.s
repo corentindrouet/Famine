@@ -11,6 +11,7 @@
 
 section .text
 	global _start
+	global _string
 	extern _treat_file
 	extern _final_end
 

