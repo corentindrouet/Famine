@@ -54,8 +54,8 @@ _treat_file:
 	mov rax, 9
 	mov rdi, 0
 	mov rsi, QWORD [rsp + 16]
-	add rsi, QWORD [rsp + 8]
-	add rsi, 8
+;	add rsi, QWORD [rsp + 8]
+;	add rsi, 8
 	mov rdx, 3
 	mov r10, 2
 	mov r8, QWORD [rsp]
@@ -153,8 +153,8 @@ _cmp:
 _call_mmaped_update:
 	mov rdi, QWORD [rsp + 24]
 	mov rsi, QWORD [rsp + 16]
-	add rsi, QWORD [rsp + 8]
-	add rsi, 8
+;	add rsi, QWORD [rsp + 8]
+;	add rsi, 8
 	mov rdx, QWORD [rsp + 8]
 	mov r10, QWORD [rsp]
 	call _update_mmaped_file
@@ -165,8 +165,8 @@ _munmap:
 	mov rax, 11
 	mov rdi, QWORD [rsp + 24]
 	mov rsi, QWORD [rsp + 16]
-	add rsi, QWORD [rsp + 8]
-	add rsi, 8
+;	add rsi, QWORD [rsp + 8]
+;	add rsi, 8
 	syscall
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ; close file
