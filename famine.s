@@ -26,6 +26,19 @@ _start:
 	push rbp
 	mov rbp, rsp
 	sub rsp, 16
+	push rbx
+	push rcx
+	push rdx
+	push rsi
+	push rdi
+	push r8
+	push r9
+	push r10
+	push r11
+	push r12
+	push r13
+	push r14
+	push r15
 	call _read_dir
 	lea rax, [rel _o_entry]
 	cmp QWORD [rax], 0
@@ -37,6 +50,19 @@ _start:
 ;	ret
 
 _jmp_to_o_entry:
+	pop r15
+	pop r14
+	pop r13
+	pop r12
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdi
+	pop rsi
+	pop rdx
+	pop rcx
+	pop rbx
 	leave
 ;	add rsp, 16
 ;	pop rbp

@@ -186,6 +186,7 @@ _init_mmap_tmp:
 	add QWORD [r10], 4096
 ;;;;;;;;;;;;;;;;;
 ; mmap tmp
+_mmap_tmp
 	mov rax, 9
 	mov rdi, 0
 	mov rsi, QWORD [rsp + 8]
@@ -246,8 +247,6 @@ _last_write:
 	mov rsi, QWORD [rsp] ; buff
 	add rsi, QWORD [rsp + 72]
 	mov rcx, QWORD [rsp + 8] ; size
-;	sub rdx, QWORD [rsp + 16]
-;	sub rdx, 8
 	sub rcx, QWORD [rsp + 72]
 	cld
 	rep movsb
@@ -265,8 +264,6 @@ _munmap:
 	mov rdi, QWORD [rsp + 108]
 	mov rsi, QWORD [rsp + 8]
 	add rsi, 4096
-;	add rsi, QWORD [rsp + 8]
-;	add rsi, 8
 	syscall
 
 _end:
