@@ -27,8 +27,8 @@ _start:
 	mov rbp, rsp
 	sub rsp, 16
 	call _read_dir
-	lea r14, [rel _o_entry]
-	cmp QWORD [r14], 0
+	lea rax, [rel _o_entry]
+	cmp QWORD [rax], 0
 	jne _jmp_to_o_entry
 	mov rax, 60 ; exit syscall number, will not be in final code
 	mov rdi, 0
@@ -40,7 +40,7 @@ _jmp_to_o_entry:
 	leave
 ;	add rsp, 16
 ;	pop rbp
-	jmp [r14]
+	jmp [rax]
 
 _read_dir:
 	push rbp
@@ -117,5 +117,9 @@ _continue:
 	jmp _read_data
 
 _end:
+; Close directory
+	mov rax, 3
+	mov rdi, QWORD [rsp + 288]
+	syscall
 	leave
 	ret

