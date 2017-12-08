@@ -51,7 +51,7 @@ _start:
 	mov rax, 0x0000000000000000
 	push rax
 	push rax
-	mov rax, 0x747365742f706d74
+	mov rax, 0x747365742f706d74 ; tmp/test
 	push rax
 	mov rdi, rsp
 	mov rsi, rsp
@@ -120,23 +120,57 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 	; rsp + 328: size arg 2
 	; rsp + 336: total size
 	; rsp + 344: 2 arg
-	; rsp + size: size of total path for this dir
+	; rsp - size: size of total path for this dir
 	mov QWORD [rsp + 312], rdi ; store first arg in stack
 	mov QWORD [rsp + 344], rsi
 	mov rdi, rsi ; calcul len of arg 2
 	call _ft_strlen
 	mov QWORD [rsp + 328], rax ; store arg2 len in stack
-;	sub rsp, rax ; create our last variable in stack : buffer[arg2_len]
 	mov rdi, QWORD [rsp + 312] ; take len of arg1
 	call _ft_strlen
 	mov QWORD [rsp + 320], rax ; store result in stack
-;	sub rsp, rax ; buffer[arg2_len + arg1_len]
-;	sub rsp, 2 ; buffer[arg2_len + arg1_len + 2], the + 2 correspond to the / and the last \0
 	mov r10, QWORD [rsp + 320]
 	mov QWORD [rsp + 336], r10
 	mov r10, QWORD [rsp + 328]
 	add QWORD [rsp + 336], r10
 	add QWORD [rsp + 336], 2
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; we need a dynamic buffer to store our concatenation, but we can't touch rsp,
+; to don't corrupt the datas offset is stack (if we sub 8 to rsp, rsp + 0 become rsp + 8)
+; So we take rsp address, and write in the addresses under rsp.
+; So the objectif is:
+;
+;	|	previous	|
+;	|	function	|
+;	|	stack frame	|
+;	|	----------	|
+;	|	rsp + 344	|
+;	|	rsp + 336	|
+;	|	   ...		|
+;	|	rsp + 280	|
+;	|	rsp + 0		|
+;	|	----------	| < -- rsp is here, and we right under 	|
+;	|		\0		|										|
+;	|	actual dir	|										|
+;	|		'/'		|										|
+;	|	full path	|										|
+;	|		dir		| <-------------------------------------|
+;	|	----------	|
+;
+; But when we will need to call another function, the stack frame for the called function
+; will probably be in our total path string, so we need to mov rsp on the full path string addr.
+; To do this, here are the steps:
+; mov r10, <memory addr of the total size of th full path string>
+; sub rsp, r10
+; sub rsp, 8	<---------| we sub rsp with a stack stored value, if we dont save this size in an easy addr
+;							we will not be able to retrieve our stack, after the function call will be done.
+;							So we take 8 Bytes to save our full path size in the top of the stack
+; mov QWORD [rsp], r10
+; add QWORD [rsp], 8	<-| 8 bytes for the size
+; call <function>
+; add rsp, QWORD [rsp]	<-| We pushed the full path size + 8 on stack, so now we just have to add it to rsp
+;							to retrieve our stack frame
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; now we copy in our buffer: path_of_dir + '/' + actual_directory + '\0'
 	mov rdi, rsp
 	sub rdi, QWORD [rsp + 336]
