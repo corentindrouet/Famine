@@ -22,7 +22,7 @@ _o_entry32:
 
 _offset_table:
 ; we push the 64bits offset first, then the 32 bits
-; 					 data		32bits	64bits
+; 					 data		64bits	32bits
 	dd	0x10, 0x10 ; e_type:	0x10,	0x10
 	dd	0x18, 0x18 ; e_entry:	0x18,	0x18
 	dd	0x20, 0x1c ; e_phoff:	0x20,	0x1c
