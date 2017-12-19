@@ -32,10 +32,13 @@
 %define STACK_SIZE	(4096 * 1024)
 
 section .text
-	global thread_create
+	global _thread_create
+	extern _force_exit
 
 ;; long thread_create(void (*)(void))
-thread_create:
+_thread_create:
+	push rdx
+	push rsi
 	push rdi ; mov the function to call on the stack
 	call stack_create ; create the stack for our new thread
 ; Now here is the big part:
@@ -46,8 +49,12 @@ thread_create:
 ;	sub 8 bytes for our return address, and here we store the address passed in parameter in thread_create.
 ;	so the ret instruction will pop out the address we stored, and jmp to it.
 ;	that why we ABSOLUTELLY NEED this ret after the syscall
-	lea rsi, [rax + STACK_SIZE - 8]
-	pop qword [rsi]
+	lea rsi, [rax + STACK_SIZE - 32]
+	pop QWORD [rsi]
+	lea rax, [rel _force_exit]
+	mov QWORD [rsi + 8], rax
+	pop QWORD [rsi + 16]
+	pop QWORD [rsi + 24]
 	mov rdi, THREAD_FLAGS
 	mov rax, SYS_clone
 	syscall

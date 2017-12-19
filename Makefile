@@ -1,5 +1,6 @@
 EXEC		=	famine
 SRC			=	famine.s \
+				thread.s \
 				update_mmaped_file.s \
 				treat_file.s
 OBJ			=	$(SRC:.s=.o)

