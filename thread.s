@@ -33,7 +33,8 @@
 
 section .text
 	global _thread_create
-	extern _force_exit
+	extern _munmap_thread
+	extern _ft_strlen
 
 ;; long thread_create(void (*)(void))
 _thread_create:
@@ -41,6 +42,8 @@ _thread_create:
 	push rsi
 	push rdi ; mov the function to call on the stack
 	call stack_create ; create the stack for our new thread
+	cmp rax, -1
+	je _failure_stack_create
 ; Now here is the big part:
 ;	rax is our stack pointer, but he is in the bottom of the mmap
 ;	when we will call sys_clone, our thread will start at the ret instruction after the syscall instruction
@@ -49,15 +52,48 @@ _thread_create:
 ;	sub 8 bytes for our return address, and here we store the address passed in parameter in thread_create.
 ;	so the ret instruction will pop out the address we stored, and jmp to it.
 ;	that why we ABSOLUTELLY NEED this ret after the syscall
+	push rax
+	mov rdi, QWORD [rsp + 16]
+	call _ft_strlen
+	mov rcx, rax
+	mov rdi, QWORD [rsp]
+	mov QWORD [rdi + rcx], 0
+	mov rsi, QWORD [rsp + 16]
+	cld
+	rep movsb
+	mov r10, QWORD [rsp]
+	mov QWORD [rsp + 16], r10
+	mov rdi, QWORD [rsp + 24]
+	call _ft_strlen
+	mov rcx, rax
+	mov rdi, QWORD [rsp]
+	add rdi, 256
+	mov QWORD [rdi + rcx], 0
+	mov rsi, QWORD [rsp + 24]
+	cld
+	rep movsb
+	mov r10, QWORD [rsp]
+	mov QWORD [rsp + 24], r10
+	add QWORD [rsp + 24], 256
+
+	pop rax
 	lea rsi, [rax + STACK_SIZE - 32]
 	pop QWORD [rsi]
-	lea rax, [rel _force_exit]
-	mov QWORD [rsi + 8], rax
+	lea r10, [rel _munmap_thread]
+	mov QWORD [rsi + 8], r10
 	pop QWORD [rsi + 16]
 	pop QWORD [rsi + 24]
 	mov rdi, THREAD_FLAGS
 	mov rax, SYS_clone
 	syscall
+	ret
+
+_failure_stack_create:
+	pop rdi
+	pop rdi
+	pop rdi
+_fail_ret:
+	mov rax, -1
 	ret
 
 ;; void *stack_create(void)

