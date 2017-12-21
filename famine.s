@@ -55,7 +55,7 @@ _start:
 	push rax
 	push rax
 ;	mov rax, 0x747365742f706d74 ; tmp/test
-	mov rax, 0x006e69622f706d74 ; tmp/bin
+;	mov rax, 0x006e69622f706d74 ; tmp/bin
 	push rax
 	mov rdi, rsp
 	mov rsi, rsp
