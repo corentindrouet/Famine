@@ -2,22 +2,28 @@ section .text
 	global _thread_create
 
 _thread_create:
-	push rdx
-	push rsi
-	push rdi
+	mov rax, 0
+	push rax
+	push rsi ; push file path
+	mov rax, 0x1122334455667788
+	push rax
+	push rdx ; push file name
+	push rdx ; push path/name
 	mov rax, 57
 	syscall
-	pop rdi
-	pop rsi
-	pop rdx
 	cmp rax, 0
 	jne _parent_ret
-	push rdx
-	push rsi
-	call rdi
-	mov rax, 60
-	mov rdi, 0
+	mov rax, 59
+	mov rdi, QWORD [rsp]
+	mov rsi, rsp
+	add rsi, 8
+	xor rdx, rdx
 	syscall
 
 _parent_ret:
+	pop rdi
+	pop rdi
+	pop rdi
+	pop rdi
+	pop rdi
 	ret
