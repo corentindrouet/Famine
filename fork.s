@@ -3,13 +3,13 @@ section .text
 	extern _verif
 
 _thread_create:
-	lea rax, [rel _verif]
-	push QWORD [rax]
 	mov rax, 0
 	push rax
 	push rsi ; push file path
-	push rsp
-	add QWORD [rsp], 16
+	lea rax, [rel _verif]
+	push rax
+;	push rsp
+;	add QWORD [rsp], 16
 	push rdx ; push file name
 	push rdx ; push path/name
 	mov rax, 57
@@ -24,7 +24,6 @@ _thread_create:
 	syscall
 
 _parent_ret:
-	pop rdi
 	pop rdi
 	pop rdi
 	pop rdi
