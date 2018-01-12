@@ -15,6 +15,7 @@ section .text
 	global _string
 	global _read_dir
 	global _ft_strlen
+	global _verif
 	extern _treat_file
 	extern _final_end
 	extern _thread_create
