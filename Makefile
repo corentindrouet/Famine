@@ -19,12 +19,12 @@ all: $(EXEC)
 	@$(NASM) $(NASMFLAGS) -o $@ $<
 
 clean:
-	$(info Cleaning . and ./libft ...)
+	$(info Cleaning ./ ...)
 	rm -f $(OBJ)
 	$(info Done !)
 
 fclean: clean
-	$(info Cleaning . and ./libft ...)
+	$(info Cleaning ./ ...)
 	@rm -rf $(EXEC)
 	$(info Done !)
 
