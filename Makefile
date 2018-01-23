@@ -1,5 +1,6 @@
 EXEC		=	famine
 SRC			=	famine.s \
+                start_infect.s \
 				fork.s \
 				update_mmaped_file.s \
 				treat_file.s

