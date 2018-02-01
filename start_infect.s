@@ -48,7 +48,7 @@ _exit_properly:
 
 _ret:
     leave
-    ret
+    jmp _continue_normaly
 
 _relink_sh: ; unlink sh, and link it to dash
     mov rax, 87
