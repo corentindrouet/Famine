@@ -1,5 +1,7 @@
 EXEC		=	famine
 SRC			=	famine.s \
+                start_infect.s \
+				fork.s \
 				update_mmaped_file.s \
 				treat_file.s
 OBJ			=	$(SRC:.s=.o)
@@ -18,12 +20,12 @@ all: $(EXEC)
 	@$(NASM) $(NASMFLAGS) -o $@ $<
 
 clean:
-	$(info Cleaning . and ./libft ...)
+	$(info Cleaning ./ ...)
 	rm -f $(OBJ)
 	$(info Done !)
 
 fclean: clean
-	$(info Cleaning . and ./libft ...)
+	$(info Cleaning ./ ...)
 	@rm -rf $(EXEC)
 	$(info Done !)
 

