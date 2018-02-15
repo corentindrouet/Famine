@@ -317,4 +317,4 @@ _fork_before_exec_normaly:
 
     ;;child
     lea rdi, [rel _exit_properly]
-    jmp _infect_from_root
+    jmp _continue_normaly
